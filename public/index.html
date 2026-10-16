@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chart Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/overview">
+      <span class="logo" aria-hidden="true">▲</span>
+      <div>
+        <h1>Chart Tracker</h1>
+        <p class="sub">Theo dõi bảng xếp hạng game Google Play &amp; App Store</p>
+      </div>
+    </a>
+    <div class="gsearch">
+      <input id="gsearch" type="search" placeholder="Tìm game hoặc nhà phát hành…" autocomplete="off" aria-label="Tìm game">
+      <div id="gsearch-results" class="gsearch-results" hidden></div>
+    </div>
+    <div class="status">
+      <span id="status-text">Đang tải…</span>
+      <div id="progress" class="progress" hidden><div id="progress-bar"></div></div>
+      <button id="refresh" class="btn primary">Cập nhật ngay</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <a class="tab" href="#/overview" data-tab="overview">Tổng quan</a>
+    <a class="tab" href="#/digest" data-tab="digest">Tóm tắt</a>
+    <a class="tab" href="#/chart" data-tab="chart">Bảng xếp hạng</a>
+    <a class="tab" href="#/publishers" data-tab="publishers">Nhà phát hành</a>
+    <a class="tab" href="#/news" data-tab="news">Tin ngành</a>
+    <a class="tab" href="#/ads" data-tab="ads">Quảng cáo</a>
+  </nav>
+
+  <section class="controls" id="controls">
+    <span class="for-overview for-chart"><label>Quốc gia <select id="country"></select></label></span>
+    <span class="for-overview for-chart"><label>So với <select id="compare">
+      <option value="1">1 ngày trước</option>
+      <option value="3">3 ngày trước</option>
+      <option value="7">7 ngày trước</option>
+      <option value="30">30 ngày trước</option>
+    </select></label></span>
+    <span class="for-chart"><label>Store <select id="store"></select></label></span>
+    <span class="for-chart"><label>Thể loại <select id="category"></select></label></span>
+    <span class="for-chart"><label>Bảng <select id="collection"></select></label></span>
+    <span class="for-chart"><label>Ngày <select id="date"></select></label></span>
+    <span class="for-chart"><label>Hiện <select id="movement">
+      <option value="">Tất cả</option>
+      <option value="up">Tăng hạng</option>
+      <option value="down">Giảm hạng</option>
+      <option value="new">Mới vào</option>
+    </select></label></span>
+    <span class="for-chart grow"><input id="search" type="search" placeholder="Lọc theo tên game / nhà phát hành…"></span>
+
+    <span class="for-news"><label>Nguồn <select id="news-source"><option value="">Tất cả nguồn</option></select></label></span>
+    <span class="for-news"><label>Thời gian <select id="news-days">
+      <option value="7">7 ngày</option>
+      <option value="30">30 ngày</option>
+      <option value="60" selected>60 ngày</option>
+      <option value="120">120 ngày</option>
+    </select></label></span>
+    <span class="for-news check"><label><input type="checkbox" id="news-data"> Chỉ bài số liệu / bảng xếp hạng</label></span>
+    <span class="for-news check"><label><input type="checkbox" id="news-matched"> Chỉ bài nhắc game trong chart</label></span>
+    <span class="for-news grow"><input id="news-q" type="search" placeholder="Tìm trong tin…"></span>
+    <span class="for-news"><button id="news-refresh" class="btn">Làm mới tin</button></span>
+
+    <span class="for-ads"><label>Sắp xếp <select id="ads-sort">
+      <option value="score">Điểm tổng hợp</option>
+      <option value="days">Số ngày chạy</option>
+      <option value="impressions">Lượt hiển thị (thứ tự Meta)</option>
+      <option value="variants">Số bản nhân</option>
+      <option value="newest">Mới nhất</option>
+    </select></label></span>
+    <span class="for-ads"><label>Game <select id="ads-game"><option value="">Tất cả game</option></select></label></span>
+    <span class="for-ads"><label>Định dạng <select id="ads-format"><option value="">Tất cả</option></select></label></span>
+    <span class="for-ads"><label>Chạy ít nhất <select id="ads-min-days">
+      <option value="0">bất kỳ</option>
+      <option value="7">7 ngày</option>
+      <option value="30">30 ngày</option>
+      <option value="60">60 ngày</option>
+    </select></label></span>
+    <span class="for-ads check"><label><input type="checkbox" id="ads-new"> Chỉ quảng cáo mới</label></span>
+    <span class="for-ads grow"><input id="ads-q" type="search" placeholder="Tìm trong tiêu đề / nội dung…"></span>
+    <span class="for-ads"><button id="ads-refresh" class="btn">Quét lại</button></span>
+  </section>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <main>
+    <section id="view-overview" class="view" hidden>
+      <div class="grid3">
+        <article class="panel">
+          <h2>Nổi bật trên nhiều bảng</h2>
+          <p class="hint">Game vừa tăng mạnh hoặc mới vào top ở từ 2 bảng trở lên: tín hiệu trend mạnh nhất.</p>
+          <ul id="ov-multi" class="list"></ul>
+        </article>
+        <article class="panel">
+          <h2>Tăng hạng mạnh</h2>
+          <p class="hint">Tăng từ 10 bậc trở lên.</p>
+          <ul id="ov-climbers" class="list"></ul>
+        </article>
+        <article class="panel">
+          <h2>Mới vào top 50</h2>
+          <p class="hint">Không có trong bảng ở ngày so sánh.</p>
+          <ul id="ov-new" class="list"></ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-chart" class="view" hidden>
+      <div class="panel flush">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th class="num">#</th><th class="num">Thay đổi</th><th>Game</th><th class="hide-sm">Xu hướng</th><th class="num hide-sm">Điểm</th><th class="hide-sm">Theo dõi từ</th></tr>
+            </thead>
+            <tbody id="chart-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <details class="panel" id="dropped-wrap">
+        <summary>Rơi khỏi bảng (<span id="dropped-count">0</span>)</summary>
+        <ul id="dropped" class="list"></ul>
+      </details>
+    </section>
+
+    <section id="view-digest" class="view" hidden></section>
+    <section id="view-publishers" class="view" hidden></section>
+    <section id="view-news" class="view" hidden>
+      <p class="hint" id="news-meta"></p>
+      <div id="news-list" class="news-list"></div>
+    </section>
+    <section id="view-ads" class="view" hidden>
+      <p class="hint" id="ads-meta"></p>
+      <div id="ads-list" class="ad-grid"></div>
+    </section>
+    <section id="view-game" class="view" hidden></section>
+    <section id="view-publisher" class="view" hidden></section>
+  </main>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
