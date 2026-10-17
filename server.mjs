@@ -10,8 +10,9 @@ import { chart, history, overview, appPresence, search, gameDetail } from "./lib
 import { getIcon, isAllowed } from "./lib/icons.mjs";
 import { listNews, runNewsFetch, newsStatus } from "./lib/news.mjs";
 import {
-  listPublishers, publisherDetail, recentNewApps, followFromApp, unfollow, followedPublisherFor, pubStatus,
+  listPublishers, publisherDetail, recentNewApps, followFromApp, unfollow, followedPublisherFor, pubStatus, developerApps,
 } from "./lib/publishers.mjs";
+import { adCounts } from "./lib/adsources.mjs";
 import { getDigest, buildDigest, hasDigest } from "./lib/digest.mjs";
 import { runDaily, dailyStatus } from "./lib/daily.mjs";
 import { listAds, runAdsFetch, adsStatus, scanOne, unfollowGame, gameKeyForApp } from "./lib/ads.mjs";
@@ -91,14 +92,17 @@ const routes = {
     status: { running: pubStatus.running, done: pubStatus.done, total: pubStatus.total, errors: pubStatus.errors },
   }),
   "GET /api/publisher": (q) => publisherDetail(q.get("store"), q.get("devId")) ?? { notFound: true },
+  "GET /api/developer": (q) => developerApps(q.get("store"), q.get("appId")),
   "POST /api/publishers/follow": async (q, body) => followFromApp(body.store, body.appId),
   "POST /api/publishers/unfollow": async (q, body) => { unfollow(body.store, body.devId); return { ok: true }; },
 
   "GET /api/ads": (q) => listAds({
     game: q.get("game") || null,
     format: q.get("format") || null,
+    source: q.get("source") || null,
     sort: q.get("sort") || "score",
     onlyNew: q.get("onlyNew") === "1",
+    onlyActive: q.get("onlyActive") === "1",
     minDays: Number(q.get("minDays") ?? 0),
     q: q.get("q") ?? "",
   }),
@@ -106,6 +110,7 @@ const routes = {
     const key = gameKeyForApp(q.get("store"), q.get("appId"));
     return key ? { key, ...listAds({ game: key, limit: 12 }) } : { key: null, items: [] };
   },
+  "GET /api/ads/counts": (q) => adCounts(q.get("store"), q.get("appId"), gameKeyForApp(q.get("store"), q.get("appId"))),
   "POST /api/ads/refresh": () => {
     const started = !adsStatus.running && !dailyStatus.running;
     if (started) runAdsFetch().catch((e) => console.error("[ads] lỗi:", e));

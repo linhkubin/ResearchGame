@@ -52,19 +52,22 @@ async function ads(q, gameKey = null, limit = 300) {
   const d = await load("ads.json");
   if (!d) return { total: 0, items: [], games: [], formats: [], weights: {}, status: {} };
   const game = gameKey ?? q.get("game") ?? "";
-  const format = q.get("format"), minDays = Number(q.get("minDays") ?? 0), needle = norm(q.get("q") ?? "");
+  const format = q.get("format"), source = q.get("source"), minDays = Number(q.get("minDays") ?? 0), needle = norm(q.get("q") ?? "");
   let items = d.items.filter((i) => (!game || i.game === game) && (!format || i.format === format)
+    && (!source || (i.source ?? "meta") === source) && (q.get("onlyActive") !== "1" || i.active !== false)
     && (q.get("onlyNew") !== "1" || i.isNew) && (!minDays || i.days >= minDays)
     && (!needle || norm(`${i.title} ${i.body} ${i.gameName} ${i.page}`).includes(needle)));
   const sorters = {
     score: (a, b) => b.score - a.score,
     days: (a, b) => b.days - a.days,
-    impressions: (a, b) => a.imprRank / a.imprTotal - b.imprRank / b.imprTotal,
+    impressions: (a, b) => (a.imprRank ? a.imprRank / a.imprTotal : 0.5) - (b.imprRank ? b.imprRank / b.imprTotal : 0.5),
     variants: (a, b) => b.variants - a.variants,
     newest: (a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""),
   };
   items = [...items].sort(sorters[q.get("sort")] ?? sorters.score);
-  return { ...d, total: items.length, items: items.slice(0, limit) };
+  const sourceCounts = {};
+  for (const i of items) sourceCounts[i.source ?? "meta"] = (sourceCounts[i.source ?? "meta"] ?? 0) + 1;
+  return { ...d, total: items.length, items: items.slice(0, limit), sourceCounts };
 }
 
 async function game(q) {
@@ -88,6 +91,19 @@ export async function staticApi(path, opts) {
     case "publisher": return (await load(`publisher/${q.get("store")}-${fileKey(q.get("devId"))}.json`)) ?? { notFound: true };
     case "digest": return (await load(`digest/${q.get("date") || "latest"}.json`)) ?? { digest: null, dates: [] };
     case "ads": return ads(q);
+    // Bản tĩnh: chỉ có số quảng cáo Meta đã quét và nhà phát hành đang theo dõi
+    case "ads/counts": {
+      const g = await game(q);
+      const d = g?.adsKey ? await load("ads.json") : null;
+      const info = d?.games?.find((x) => x.key === g.adsKey);
+      const n = (src) => (info?.lastScan ? { count: d.items.filter((i) => i.game === g.adsKey && (i.source ?? "meta") === src).length, lastScan: info.lastScan } : { count: null });
+      return { meta: n("meta"), apple: n("apple"), google: null };
+    }
+    case "developer": {
+      const g = await game(q);
+      const p = g?.publisher && await load(`publisher/${g.publisher.store}-${fileKey(g.publisher.devId)}.json`);
+      return p ? { ...p, followed: true } : { error: "Bản công khai chỉ có danh sách game của nhà phát hành đang theo dõi." };
+    }
     case "ads/game": {
       const g = await game(q);
       if (!g?.adsKey) return { key: null, items: [], games: [], total: 0 };

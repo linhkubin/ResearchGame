@@ -229,36 +229,49 @@ async function loadNews() {
 // ================= Quảng cáo =================
 let adsPollTimer = null;
 let adsPendingGame = null;
-const FORMAT_NAME = { VIDEO: "Video", IMAGE: "Ảnh", CAROUSEL: "Carousel", DCO: "Động (DCO)", DPA: "Catalog (DPA)" };
-const PLATFORM_NAME = { FACEBOOK: "FB", INSTAGRAM: "IG", AUDIENCE_NETWORK: "AN", MESSENGER: "MSG", THREADS: "TH" };
+const FORMAT_NAME = { VIDEO: "Video", IMAGE: "Ảnh", CAROUSEL: "Carousel", DCO: "Động (DCO)", DPA: "Catalog (DPA)",
+  TEXT: "Chữ", ICON: "Icon", SCREENSHOT: "Icon + ảnh" };
+const PLATFORM_NAME = { FACEBOOK: "FB", INSTAGRAM: "IG", AUDIENCE_NETWORK: "AN", MESSENGER: "MSG", THREADS: "TH",
+  APPSTORE_SEARCH_RESULTS: "Kết quả tìm", APPSTORE_TODAY_TAB: "Today", APPSTORE_SEARCH_TAB: "Tab tìm", GOOGLE: "Google" };
+const SOURCE_NAME = { meta: "Meta", apple: "App Store", google: "Google" };
+// Ý nghĩa "bản nhân" và tên thư viện theo nguồn
+const VARIANT_LABEL = { meta: "bản nhân", apple: "nước EU", google: "QC cùng video" };
+const LIBRARY_NAME = { meta: "Ad Library", apple: "Apple Ads", google: "Google Ads" };
+const isYoutube = (u) => /^https:\/\/www\.youtube\.com\//.test(u ?? "");
 
 function adCard(a, i) {
   const p = a.parts;
-  const why = `Điểm ${a.score}/100\nSố ngày chạy: ${a.days} (${Math.round(p.days * 100)}%)\nThứ tự hiển thị: #${a.imprRank}/${a.imprTotal} (${Math.round(p.impressions * 100)}%)\nSố bản nhân: ${a.variants} (${Math.round(p.variants * 100)}%)\nNền tảng: ${a.platforms.length} (${Math.round(p.platforms * 100)}%)`;
+  const src = a.source ?? "meta";
+  const why = `Điểm ${a.score}/100${a.active ? "" : " (đã dừng, bị trừ điểm)"}\nSố ngày chạy: ${a.days} (${Math.round(p.days * 100)}%)\nThứ tự hiển thị: ${a.imprRank ? `#${a.imprRank}/${a.imprTotal}` : "không có, tính mức giữa"} (${Math.round(p.impressions * 100)}%)\nSố ${VARIANT_LABEL[src]}: ${a.variants} (${Math.round(p.variants * 100)}%)\nNền tảng/vị trí: ${a.platforms.length} (${Math.round(p.platforms * 100)}%)`;
   const media = a.thumb
     ? `<img src="${safeUrl(a.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : `<span class="noimg">Không có ảnh xem trước</span>`;
-  return `<article class="ad-card">
-    <button class="ad-media" ${a.video ? `data-video="${safeUrl(a.video)}"` : `data-open="${esc(a.libraryUrl)}"`} title="${a.video ? "Bấm để phát video" : "Mở trên Ad Library"}">
+  // Video YouTube (Google) không phát trực tiếp được trong thẻ: mở tab mới
+  const playable = a.video && !isYoutube(a.video);
+  const open = a.video && isYoutube(a.video) ? a.video : a.libraryUrl;
+  return `<article class="ad-card${a.active ? "" : " stopped"}">
+    <button class="ad-media" ${playable ? `data-video="${safeUrl(a.video)}"` : `data-open="${esc(open)}"`} title="${playable ? "Bấm để phát video" : a.video ? "Mở video trên YouTube" : `Mở trên ${LIBRARY_NAME[src]}`}">
       ${media}
       <span class="ad-rank">#${i + 1}</span>
+      <span class="ad-src ${esc(src)}">${esc(SOURCE_NAME[src] ?? src)}</span>
       <span class="ad-score" title="${esc(why)}">${a.score}</span>
-      ${a.video ? `<span class="play">▶ video</span>` : ""}
+      ${a.video ? `<span class="play">▶ video${playable ? "" : " ↗"}</span>` : ""}
     </button>
     <div class="ad-body">
       <div class="ad-game">${iconImg({ icon: a.icon, title: a.gameName })}<a href="${gameHref(a.store, a.appId)}">${esc(a.gameName)}</a></div>
       <div class="ad-title" title="${esc(a.body ?? "")}">${esc(a.title || a.body || a.page || "")}</div>
       <div class="ad-nums">
         <div><strong>${a.days}</strong><span>ngày chạy</span></div>
-        <div><strong>#${a.imprRank}</strong><span>hiển thị /${a.imprTotal}</span></div>
-        <div><strong>${a.variants}</strong><span>bản nhân</span></div>
+        <div><strong>${a.imprRank ? `#${a.imprRank}` : "–"}</strong><span>${a.imprRank ? `hiển thị /${a.imprTotal}` : "thứ tự hiển thị"}</span></div>
+        <div><strong>${a.variants}</strong><span>${VARIANT_LABEL[src]}</span></div>
       </div>
       <div class="ad-foot">
         ${a.isNew ? `<span class="badge new">MỚI</span>` : ""}
+        ${a.active ? "" : `<span class="tag down" title="Lần hiển thị cuối ${fmtDate(a.endDate)}">đã dừng</span>`}
         <span class="tag">${esc(FORMAT_NAME[a.format] ?? a.format ?? "?")}</span>
         <span class="tag" title="${esc(a.platforms.join(", "))}">${a.platforms.map((x) => PLATFORM_NAME[x] ?? x).join(" ")}</span>
         <span class="tag">từ ${fmtDate(a.startDate)}</span>
-        <a class="tag link" href="${esc(a.libraryUrl)}" target="_blank" rel="noopener">Ad Library ↗</a>
+        <a class="tag link" href="${esc(a.libraryUrl)}" target="_blank" rel="noopener">${LIBRARY_NAME[src]} ↗</a>
       </div>
     </div>
   </article>`;
@@ -272,12 +285,16 @@ async function loadAds() {
     adsPendingGame = null;
   }
   const params = new URLSearchParams({
-    sort: $("#ads-sort").value, game: $("#ads-game").value, format: $("#ads-format").value,
-    minDays: $("#ads-min-days").value, onlyNew: $("#ads-new").checked ? "1" : "0", q: $("#ads-q").value.trim(),
+    sort: $("#ads-sort").value, game: $("#ads-game").value, format: $("#ads-format").value, source: $("#ads-source").value,
+    minDays: $("#ads-min-days").value, onlyNew: $("#ads-new").checked ? "1" : "0",
+    onlyActive: $("#ads-active").checked ? "1" : "0", q: $("#ads-q").value.trim(),
   });
   const d = await api(`/api/ads?${params}`);
   setNotice(null);
-  const curGame = $("#ads-game").value, curFormat = $("#ads-format").value;
+  const curGame = $("#ads-game").value, curFormat = $("#ads-format").value, curSource = $("#ads-source").value;
+  $("#ads-source").innerHTML = `<option value="">Tất cả nguồn</option>` + Object.entries(d.sources ?? SOURCE_NAME)
+    .map(([k, n]) => `<option value="${esc(k)}">${esc(n)}${d.sourceCounts?.[k] != null ? ` (${d.sourceCounts[k]})` : ""}</option>`).join("");
+  $("#ads-source").value = curSource;
   $("#ads-game").innerHTML = `<option value="">Tất cả game (${d.games.length})</option>` +
     d.games.map((g) => `<option value="${esc(g.key)}">${esc(g.name)}${g.adCount != null ? ` (${g.adCount})` : ""}${g.lastError ? " ⚠" : ""}</option>`).join("");
   $("#ads-game").value = curGame;
@@ -290,8 +307,10 @@ async function loadAds() {
   const last = d.games.map((g) => g.lastScan).filter(Boolean).sort().pop();
   $("#ads-meta").innerHTML = (st.running
     ? `Đang quét ${st.done}/${st.total}${st.current ? `: ${esc(st.current)}` : ""}… `
-    : `${d.total} quảng cáo đang chạy · ${d.games.length} game · quét lần cuối ${last ? fmtDate(last) : "chưa"}${errs}. `)
-    + `Nguồn: Meta Ad Library. Điểm = ${Math.round(w.days * 100)}% số ngày chạy + ${Math.round(w.impressions * 100)}% thứ tự lượt hiển thị Meta trả về + ${Math.round(w.variants * 100)}% số bản nhân + ${Math.round(w.platforms * 100)}% số nền tảng (di chuột lên điểm để xem chi tiết). Meta không phân biệt playable; playable AppLovin/Unity cần công cụ trả phí.`;
+    : `${d.total} quảng cáo · ${d.games.length} game · quét lần cuối ${last ? fmtDate(last) : "chưa"}${errs}. `)
+    + `Một kho chung từ Meta Ad Library, App Store (Apple Ad Repository, chỉ các nước EU, chậm 7 ngày) và Google Ads Transparency, xếp theo cùng một điểm: `
+    + `${Math.round(w.days * 100)}% số ngày chạy + ${Math.round(w.impressions * 100)}% thứ tự hiển thị nguồn trả về + ${Math.round(w.variants * 100)}% số bản nhân (App Store: số nước; Google: số QC dùng cùng video) + ${Math.round(w.platforms * 100)}% số nền tảng; `
+    + `quảng cáo đã dừng nhân ${d.stoppedFactor ?? 0.7}. Không nguồn nào công khai lượt xem nên số ngày chạy là chỉ số chính (di chuột lên điểm để xem chi tiết). Playable AppLovin/Unity cần công cụ trả phí.`;
   $("#ads-refresh").disabled = st.running;
   $("#ads-list").innerHTML = d.items.length ? d.items.map(adCard).join("")
     : `<div class="panel muted center">${d.games.length ? "Không có quảng cáo phù hợp." : `Chưa quét quảng cáo. Bấm "Quét lại" (khoảng 30 giây mỗi game) hoặc chờ quy trình hằng ngày.`}</div>`;
@@ -307,10 +326,10 @@ async function loadGameAds(app) {
   const g = d.games?.find((x) => x.key === d.key);
   const scanning = d.status?.running;
   const head = g?.lastScan
-    ? `${d.total} quảng cáo đang chạy · quét ${fmtDate(g.lastScan)}${g.lastError ? ` · <span class="down">lỗi: ${esc(g.lastError)}</span>` : ""}`
+    ? `${d.total} quảng cáo (${Object.entries(d.sourceCounts ?? {}).map(([k, n]) => `${SOURCE_NAME[k] ?? k} ${n}`).join(", ") || "không có"}) · quét ${fmtDate(g.lastScan)}${g.lastError ? ` · <span class="down">lỗi: ${esc(g.lastError)}</span>` : ""}`
     : "Chưa quét quảng cáo của game này.";
   el.innerHTML = `
-    <div class="panel-head"><h2>Quảng cáo Meta tốt nhất</h2>
+    <div class="panel-head"><h2>Quảng cáo hiệu quả nhất</h2>
       <div class="actions">
         ${g?.lastScan ? `<a class="btn" href="#/ads" data-ads-game="${esc(d.key)}">Xem tất cả</a>` : ""}
         <button class="btn" data-action="scan-ads" data-store="${esc(app.store)}" data-app="${esc(app.appId)}"${scanning ? " disabled" : ""}>
@@ -469,16 +488,105 @@ async function loadGame(store, appId) {
     return;
   }
   // Mặc định hiện 5 bảng game đang có hạng tốt nhất
-  game = { data, visible: new Set(data.series.slice(0, 5).map((s) => s.key)), period: "30" };
+  game = { data, visible: new Set(data.series.slice(0, 5).map((s) => s.key)), period: "30", devOpen: false, dev: null, adCounts: null };
   renderGame();
 }
 
+// Tên ngắn để tìm: bỏ phụ đề và dấu thừa ("Magic Sort!" -> "Magic Sort", "Block Out! - Color Sort" -> "Block Out")
+const searchName = (t) => String(t ?? "").split(/\s[-–—|]\s|:/)[0].replace(/[!?™®©.]+/g, " ").replace(/\s+/g, " ").trim();
+// Nhà phát hành bỏ hậu tố pháp lý: "Grand Games A.Ş." -> "Grand Games", "SayGames Ltd" -> "SayGames"
+const LEGAL_SUFFIX = /([\s,.]+(ltd|limited|llc|inc|corp|co|sas|sa|gmbh|pte|plc|srl|jsc|a\.?ş|a\.?s|oy|ab|bv)\.?)+$/i;
+const devName = (d) => String(d ?? "").replace(/\s+/g, " ").replace(/\.com$/i, "").replace(LEGAL_SUFFIX, "").trim();
+
 function adLinkButtons(app) {
-  const q = encodeURIComponent(app.title.split(/\s[-–—|]\s|:/)[0].trim());
-  const dev = encodeURIComponent(app.developer ?? "");
-  return meta.adLinks.map((l, i) => `<a class="adlink" href="${esc(l.url.replace("{q}", q).replace("{dev}", dev))}" target="_blank" rel="noopener"
-      data-copy="${l.copy ? esc(l.copy === "dev" ? app.developer : app.title) : ""}" data-idx="${i}">
-      <strong>${esc(l.name)}</strong><span>${esc(l.desc)}${l.copy ? " · tự sao chép tên" : ""}</span></a>`).join("");
+  const vals = { q: searchName(app.title), dev: app.developer ?? "", devq: devName(app.developer) };
+  const url = (u) => u.replace(/\{(q|dev|devq)\}/g, (_, k) => encodeURIComponent(vals[k]));
+  return meta.adLinks.map((l, i) => `<a class="adlink" href="${esc(url(l.url))}" target="_blank" rel="noopener"
+      data-copy="${l.copy ? esc(l.copy === "dev" ? app.developer : app.title) : ""}" data-idx="${i}"${l.count ? ` data-count="${esc(l.count)}"` : ""}>
+      <strong>${esc(l.name)}${l.count ? ` <em class="adcount muted">đang đếm…</em>` : ""}</strong>
+      <span>${esc(l.desc)}${l.copy ? " · tự sao chép tên" : ""}</span>
+      ${l.count ? `<small class="adcount-note"></small>` : ""}</a>`).join("");
+}
+
+// Số quảng cáo trên từng thư viện, điền vào các ô ở mục "Xem quảng cáo"
+const fmtNum = (n) => Number(n).toLocaleString("vi-VN");
+async function loadAdCounts(app) {
+  if (!game.adCounts) game.adCounts = await api(`/api/ads/counts?store=${app.store}&appId=${encodeURIComponent(app.appId)}`);
+  const c = game.adCounts;
+  const fill = (key, count, note, cls = "") => {
+    const a = document.querySelector(`.adlink[data-count="${key}"]`);
+    if (!a) return;
+    const em = a.querySelector(".adcount");
+    em.textContent = count;
+    em.className = `adcount ${cls}`;
+    a.querySelector(".adcount-note").textContent = note;
+  };
+  const scanned = (key, m, what) => {
+    if (!m) fill(key, "–", "Không có dữ liệu", "muted");
+    else if (m.count == null) fill(key, "chưa quét", "Bấm \"Quét quảng cáo\" ở mục bên dưới", "muted");
+    else fill(key, `${fmtNum(m.count)} QC`, `${what} · quét ${fmtDate(m.lastScan)}`, "count");
+  };
+  scanned("meta", c.meta, "đang chạy của game");
+  scanned("apple", c.apple, "của game ở EU, 90 ngày");
+  const g = c.google;
+  if (!g || g.error) fill("google", "–", g?.error ? `Lỗi: ${g.error}` : "Bản công khai không đếm được", "muted");
+  else if (!g.advertiser) fill("google", "không thấy", g.rejected?.length
+    ? `Tài khoản trùng tên (${[...new Set(g.rejected)].join(", ")}) không quảng cáo game nào của nhà phát hành này: có thể là công ty khác cùng tên`
+    : g.candidates?.length ? `Không có nhà quảng cáo trùng tên (gần nhất: ${g.candidates.join(", ")})` : "Không có nhà quảng cáo trùng tên", "muted");
+  else {
+    const gameCount = g.game?.count != null ? `${fmtNum(g.game.count)} của game (trong ${fmtNum(Math.min(g.max, 120))} QC mới nhất) · ` : "";
+    fill("google", `${g.game?.count != null ? `${fmtNum(g.game.count)} / ` : ""}${g.min === g.max ? fmtNum(g.max) : `${fmtNum(g.min)}–${fmtNum(g.max)}`} QC`,
+      `${gameCount}toàn bộ của "${g.advertiser}" (${g.region})${g.approx ? " · tên gần đúng" : ""} · đã xác minh có quảng cáo game của nhà phát hành${g.stale ? ` · số cũ ${fmtDate(g.stale)}` : ""}`, "count");
+    // Mở thẳng trang nhà quảng cáo thay vì trang tìm kiếm
+    const a = document.querySelector('.adlink[data-count="google"]');
+    if (a && safeUrl(g.url)) {
+      a.href = g.url;
+      delete a.dataset.copy;
+      a.querySelector("span").textContent = a.querySelector("span").textContent.replace(" · tự sao chép tên", " · mở thẳng trang nhà quảng cáo");
+    }
+  }
+}
+
+// Tất cả game của nhà phát hành (bấm tên nhà phát hành ở đầu trang game)
+function devAppsPanel() {
+  const d = game.dev;
+  if (!d) return `<p class="muted">Đang lấy danh sách game của nhà phát hành…</p>`;
+  if (d.error || !d.publisher) return `<p class="down">${esc(d.error ?? "Không lấy được danh sách game.")}</p>`;
+  const p = d.publisher;
+  const inChart = d.apps.filter((a) => a.bestRank).length;
+  return `<div class="panel-head"><h2>Game của ${esc(p.name)}</h2>
+      <div class="actions">
+        ${d.followed ? `<a class="btn" href="${pubHref(p.store, p.devId)}">Trang nhà phát hành</a>`
+          : `<button class="btn" data-action="follow" data-store="${esc(game.data.app.store)}" data-app="${esc(game.data.app.appId)}">+ Theo dõi</button>`}
+        <button class="btn" data-action="dev-apps">Đóng</button>
+      </div></div>
+    <p class="hint">${d.apps.length} game · ${inChart} đang trong chart${d.followed ? "" : " · lấy trực tiếp từ store"}</p>
+    <ul class="list dev-apps">${d.apps.map((a) => {
+      const href = a.bestRank || a.charts ? gameHref(p.store, a.appId) : safeUrl(a.url);
+      const ext = a.bestRank || a.charts ? "" : ` target="_blank" rel="noopener"`;
+      const cur = a.appId === game.data.app.appId;
+      return `<li${cur ? ` class="current"` : ""}><a class="row-link" href="${href}"${ext}>
+        ${iconImg(a)}
+        <div class="meta"><div class="title">${esc(a.title)}${a.isNew ? ` <span class="badge new">MỚI</span>` : ""}</div>
+          <div class="tags">${a.bestRank ? `<span class="tag up">#${a.bestRank} · ${a.charts} bảng</span>` : `<span class="tag">ngoài chart ↗</span>`}
+            ${a.score ? `<span class="tag">${Number(a.score).toFixed(1)}★</span>` : ""}
+            ${a.released ? `<span class="tag">${esc(String(a.released).length > 12 ? fmtDate(a.released) : a.released)}</span>` : ""}</div>
+        </div></a></li>`;
+    }).join("")}</ul>`;
+}
+
+async function toggleDevApps() {
+  game.devOpen = !game.devOpen;
+  const el = $("#dev-apps");
+  el.hidden = !game.devOpen;
+  if (!game.devOpen) return;
+  el.innerHTML = devAppsPanel();
+  if (!game.dev) {
+    const { app } = game.data;
+    game.dev = await api(`/api/developer?store=${app.store}&appId=${encodeURIComponent(app.appId)}`)
+      .catch((e) => ({ error: String(e.message ?? e) }));
+    if (game?.data.app.appId === app.appId) $("#dev-apps").innerHTML = devAppsPanel();
+  }
 }
 
 function renderGame() {
@@ -498,7 +606,7 @@ function renderGame() {
       ${iconImg(app, "icon big")}
       <div class="grow">
         <h2>${esc(app.title)}</h2>
-        <div class="dev">${pub ? `<a href="${pubHref(pub.store, pub.devId)}">${esc(app.developer)}</a>` : esc(app.developer)} · ${storeBadge(store)}
+        <div class="dev"><button class="devlink" data-action="dev-apps" title="Xem tất cả game của nhà phát hành">${esc(app.developer)} ${game.devOpen ? "▴" : "▾"}</button> · ${storeBadge(store)}
           ${app.score != null ? ` · ${app.score.toFixed(1)}★` : ""}</div>
         <div class="tags">
           <a class="tag link" href="${safeUrl(app.url)}" target="_blank" rel="noopener">Mở trên store ↗</a>
@@ -507,6 +615,8 @@ function renderGame() {
         </div>
       </div>
     </div>
+
+    <section class="panel" id="dev-apps"${game.devOpen ? "" : " hidden"}>${game.devOpen ? devAppsPanel() : ""}</section>
 
     <div class="stats">
       <div class="stat"><span>Hạng tốt nhất</span><strong>${stats.bestRank ? `#${stats.bestRank}` : "–"}</strong><em>${esc(label(stats.bestChart))}${stats.bestDate ? ` · ${fmtDate(stats.bestDate)}` : ""}</em></div>
@@ -536,12 +646,13 @@ function renderGame() {
 
     <section class="panel">
       <h2>Xem quảng cáo</h2>
-      <p class="hint">Mở thư viện quảng cáo, tìm sẵn theo tên game. Playable chạy trên AppLovin/Unity không có thư viện công khai; cần công cụ trả phí như AdMapix, SocialPeta.</p>
+      <p class="hint">Mở thư viện quảng cáo, tìm sẵn theo tên game. Số QC: Meta đếm quảng cáo đang chạy của riêng game (lần quét gần nhất); Google đếm toàn bộ quảng cáo của nhà quảng cáo trùng tên nhà phát hành (Google không cho lọc theo game). Playable chạy trên AppLovin/Unity không có thư viện công khai; cần công cụ trả phí như AdMapix, SocialPeta.</p>
       <div class="adlinks">${adLinkButtons(app)}</div>
     </section>
 
     <section class="panel" id="game-ads"><p class="muted">Đang tải quảng cáo…</p></section>`;
   loadGameAds(app);
+  loadAdCounts(app);
 }
 
 function multiLineChart(shown, dates) {
@@ -709,7 +820,7 @@ async function init() {
   $("#news-q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(loadNews, 250); });
   $("#news-refresh").addEventListener("click", async () => { await post("/api/news/refresh"); loadNews(); });
 
-  for (const id of ["ads-sort", "ads-game", "ads-format", "ads-min-days", "ads-new"]) $("#" + id).addEventListener("change", loadAds);
+  for (const id of ["ads-sort", "ads-source", "ads-game", "ads-format", "ads-min-days", "ads-new", "ads-active"]) $("#" + id).addEventListener("change", loadAds);
   let adsQTimer;
   $("#ads-q").addEventListener("input", () => { clearTimeout(adsQTimer); adsQTimer = setTimeout(loadAds, 250); });
   $("#ads-refresh").addEventListener("click", async () => {
@@ -744,6 +855,12 @@ async function init() {
         location.hash = "#/publishers";
       }
       if (act === "csv") exportCsv();
+      if (act === "dev-apps" && game) {
+        await toggleDevApps();
+        const b = document.querySelector(".devlink");
+        if (b) b.textContent = `${game.data.app.developer} ${game.devOpen ? "▴" : "▾"}`;
+        if (game.devOpen) $("#dev-apps").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
       if (act === "scan-ads") {
         btn.disabled = true; btn.textContent = "Đang quét…";
         const r = await post("/api/ads/scan", { store: btn.dataset.store, appId: btn.dataset.app });

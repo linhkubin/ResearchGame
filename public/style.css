@@ -285,6 +285,15 @@ h3 { font-size: 13px; margin: 6px 0 4px; color: var(--muted); }
 }
 .adlink:hover { border-color: var(--accent); }
 .adlink span { font-size: 12px; color: var(--muted); }
+.adlink strong { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.adcount { font-style: normal; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.adcount.count { color: var(--accent); }
+.adcount-note { font-size: 11px; color: var(--muted); }
+.adcount-note:empty { display: none; }
+.devlink { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+.devlink:hover { text-decoration: underline; }
+.dev-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 16px; }
+.dev-apps li.current { background: var(--surface-2); border-radius: 8px; }
 
 /* ---------- tóm tắt & nhà phát hành ---------- */
 .digest-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -311,6 +320,11 @@ h3 { font-size: 13px; margin: 6px 0 4px; color: var(--muted); }
 .ad-rank, .ad-score { position: absolute; top: 8px; color: #fff; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
 .ad-rank { left: 8px; background: rgba(0,0,0,.7); }
 .ad-score { right: 8px; background: var(--accent); cursor: help; }
+.ad-src { position: absolute; top: 8px; left: 44px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; color: #fff; }
+.ad-src.meta { background: #1877f2; }
+.ad-src.apple { background: #1d1d1f; }
+.ad-src.google { background: #188038; }
+.ad-card.stopped .ad-media img { opacity: .55; }
 .ad-body { padding: 10px 12px 12px; display: grid; gap: 6px; font-size: 13px; }
 .ad-game { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
 .ad-game a { color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
