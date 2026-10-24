@@ -340,6 +340,169 @@ async function loadGameAds(app) {
   if (scanning) setTimeout(() => view === "game" && game?.data.app.appId === app.appId && loadGameAds(app), 4000);
 }
 
+// ================= Game mới =================
+let ngData = null;
+let ngTrend = null;
+
+async function loadNewGames(force = false) {
+  if (!ngData || force) ngData = await api("/api/newgames");
+  setNotice(null);
+  renderNewGames();
+  const st = ngData.status;
+  $("#ng-refresh").disabled = !!st.running;
+  if (st.running) setTimeout(() => view === "newgames" && loadNewGames(true), 5000);
+}
+
+function renderNewGames() {
+  if (!ngData) return;
+  const store = $("#ng-store").value, days = Number($("#ng-days").value), needle = norm($("#ng-q").value.trim());
+  const noClone = $("#ng-noclone").checked, noChart = $("#ng-nochart").checked;
+  let items = ngData.items.filter((i) => (!store || i.store === store) && i.age <= days
+    && (!noClone || !i.cluster) && (!noChart || !i.chart)
+    && (!ngTrend || norm(i.title).replace(/[^\p{L}\p{N}]+/gu, " ").includes(ngTrend))
+    && (!needle || norm(`${i.title} ${i.developer} ${i.genre}`).includes(needle)));
+  const size = (i) => (i.store === "gplay" ? i.minInstalls ?? 0 : (i.ratings ?? 0) * 100);
+  const gain = (i) => (i.store === "gplay" ? i.installsGain ?? 0 : (i.ratingsGain ?? 0) * 100);
+  const sorters = {
+    momentum: (a, b) => b.momentum - a.momentum || size(b) - size(a),
+    gain: (a, b) => gain(b) - gain(a) || b.momentum - a.momentum,
+    size: (a, b) => size(b) - size(a),
+    released: (a, b) => b.released.localeCompare(a.released) || b.momentum - a.momentum,
+    found: (a, b) => b.firstSeen.localeCompare(a.firstSeen) || b.released.localeCompare(a.released),
+  };
+  items = [...items].sort(sorters[$("#ng-sort").value] ?? sorters.momentum);
+
+  const st = ngData.status;
+  const n = (s) => ngData.items.filter((i) => i.store === s).length;
+  const errs = st.errors?.length ? ` · ${st.errors.length} lỗi` : "";
+  $("#ng-meta").innerHTML = (st.running ? `Đang quét ${st.done}/${st.total} từ khoá (${esc(st.step ?? "")})… ` : "")
+    + `${items.length} game · tổng ${n("gplay")} Google Play + ${n("ios")} App Store phát hành trong ${ngData.days} ngày · quét ${st.lastFetch ? fmtDate(st.lastFetch) : "chưa"}${errs}. `
+    + `Quét riêng từng store theo ${ngData.terms} từ khoá thể loại (Mỹ); Google Play lan thêm theo "game tương tự". `
+    + `Đà tăng = phân vị tốc độ trong cùng store (Android: lượt cài/ngày theo mốc của Google; iOS: đánh giá/ngày). Không phải toàn bộ game mới trên store.`;
+
+  const tr = ngData.trends ?? [];
+  $("#ng-trends").hidden = !tr.length;
+  $("#ng-trends").innerHTML = `<h2>Kiểu game đang bị clone</h2>
+    <p class="hint">Tên game có từ 3 studio cùng ra trong ${ngData.days} ngày. Bấm để lọc.</p>
+    <div class="ng-trends">${tr.map((t) => `<button class="ng-trend${ngTrend === t.key ? " on" : ""}" data-trend="${esc(t.key)}">
+      ${esc(t.name)} · ${t.devs} studio <span class="muted">(${[t.gplay ? `Android ${t.gplay}` : "", t.ios ? `iOS ${t.ios}` : ""].filter(Boolean).join(", ")})</span></button>`).join("")}</div>`;
+
+  $("#ng-body").innerHTML = items.length ? items.slice(0, 500).map((i) => {
+    const href = i.chart ? gameHref(i.store, i.appId) : safeUrl(i.url);
+    const ext = i.chart ? "" : ` target="_blank" rel="noopener"`;
+    const sizeTxt = i.store === "gplay"
+      ? `${esc(i.installs ?? "–")}${i.ratings ? `<div class="muted">${fmtNum(i.ratings)} đánh giá</div>` : ""}`
+      : `${fmtNum(i.ratings ?? 0)} đánh giá${i.score ? `<div class="muted">${i.score.toFixed(1)}★</div>` : ""}`;
+    const speed = i.store === "gplay" ? (i.installsPerDay != null ? `${fmtNum(i.installsPerDay)}/ngày` : "–") : `${i.ratingsPerDay ?? 0} đg/ngày`;
+    const g = i.store === "gplay" ? i.installsGain : i.ratingsGain;
+    const gainTxt = g ? `<span class="up">+${fmtNum(g)}</span><div class="muted">${i.gainDays} ngày</div>` : `<span class="muted">–</span>`;
+    return `<tr>
+      <td><a class="game" href="${href}"${ext}>${iconImg(i)}<div class="meta">
+        <div class="title">${esc(i.title)}</div><div class="dev">${esc(i.developer)}</div>
+        <div class="tags">${storeBadge(i.store)}
+          ${i.chart ? `<span class="tag up">đã vào chart #${i.chart.rank}</span>` : ""}
+          ${i.followed ? `<span class="tag">NPH đang theo dõi</span>` : ""}
+          ${i.cluster ? `<span class="tag" title="Số studio cùng ra game trùng tên">${i.cluster} bản trùng tên</span>` : ""}
+          ${i.genre ? `<span class="tag hide-sm">${esc(i.genre)}</span>` : ""}</div></div></a></td>
+      <td>${fmtDate(i.released)}<div class="muted">${i.age} ngày</div></td>
+      <td class="num">${sizeTxt}</td>
+      <td class="num hide-sm">${speed}</td>
+      <td class="num hide-sm">${gainTxt}</td>
+      <td><span class="ng-bar" title="${i.momentum}/100"><i style="width:${i.momentum}%"></i></span> <span class="muted">${i.momentum}</span></td>
+      <td class="hide-sm muted">${esc(i.foundBy ?? "")}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="muted center">${ngData.items.length ? "Không có game phù hợp." : `Chưa quét. Bấm "Quét lại" (vài phút) hoặc chờ quy trình hằng ngày.`}</td></tr>`;
+}
+
+// ================= Playable =================
+let plData = null;
+let plCurrent = null;
+const PL_TYPE = { game: "Game", brand: "Thương hiệu", app: "Ứng dụng" };
+
+async function loadPlayables(force = false) {
+  if (!plData || force) plData = await api("/api/playables");
+  setNotice(null);
+  const cur = $("#pl-source").value;
+  $("#pl-source").innerHTML = `<option value="">Tất cả nguồn</option>` + plData.sources.map((s) => {
+    const n = plData.items.filter((i) => i.source === s.key).length;
+    return `<option value="${esc(s.key)}">${esc(s.key)} (${n})</option>`;
+  }).join("");
+  $("#pl-source").value = cur;
+  renderPlayables();
+  const st = plData.status;
+  $("#pl-refresh").disabled = !!st.running;
+  if (st.running) setTimeout(() => view === "playables" && loadPlayables(true), 3000);
+}
+
+function renderPlayables() {
+  if (!plData) return;
+  const source = $("#pl-source").value, type = $("#pl-type").value, needle = norm($("#pl-q").value.trim());
+  const onlyChart = $("#pl-chart").checked, onlyNew = $("#pl-new").checked;
+  let items = plData.items.filter((i) => (!source || i.source === source) && (!type || i.type === type)
+    && (!onlyChart || i.chart) && (!onlyNew || i.isNew) && (!needle || norm(`${i.name} ${i.category}`).includes(needle)));
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const sorters = {
+    chart: (a, b) => (a.chart?.rank ?? 1e9) - (b.chart?.rank ?? 1e9) || byName(a, b),
+    new: (a, b) => (b.firstSeen ?? "").localeCompare(a.firstSeen ?? "") || (b.updated ?? "").localeCompare(a.updated ?? "") || byName(a, b),
+    name: byName,
+    source: (a, b) => a.source.localeCompare(b.source) || byName(a, b),
+  };
+  items = [...items].sort(sorters[$("#pl-sort").value] ?? sorters.chart);
+
+  const st = plData.status;
+  const inChart = plData.items.filter((i) => i.chart).length;
+  const errs = st.errors?.length ? ` · lỗi: ${st.errors.map((e) => esc(e.source)).join(", ")}` : "";
+  $("#pl-meta").innerHTML = (st.running ? "Đang lấy danh sách… " : "")
+    + `${items.length}/${plData.items.length} playable · ${inChart} của game đang trong chart · cập nhật ${st.lastFetch ? fmtDate(st.lastFetch) : "chưa"}${errs}. `
+    + `Nguồn: showcase công khai của ${plData.sources.filter((s) => s.site).map((s) => `<a href="${safeUrl(s.site)}" target="_blank" rel="noopener">${esc(s.key)}</a>`).join(", ")} và portfolio studio khác. `
+    + `Đây là playable studio làm cho khách hoặc bản demo, không phải toàn bộ playable đang chạy trên thị trường.`;
+  $("#pl-list").innerHTML = items.length ? items.map((p) => {
+    const idx = plData.items.indexOf(p);
+    const thumb = p.thumb ? `<img src="${safeUrl(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+      : p.icon ? `<img src="${iconSrc(p.icon)}" alt="" loading="lazy">` : `<span class="noimg">${esc(p.name.charAt(0))}</span>`;
+    return `<article class="pl-card">
+      <button class="pl-thumb" data-pl-play="${idx}" title="Chơi thử ${esc(p.name)}">${thumb}
+        <span class="pl-src">${esc(p.source)}</span><span class="pl-play">▶ Chơi thử</span></button>
+      <div class="pl-body">
+        <div class="pl-name" title="${esc(p.name)}">${esc(p.name)}</div>
+        <div class="pl-foot">
+          ${p.isNew ? `<span class="badge new">MỚI</span>` : ""}
+          ${p.chart ? `<a class="tag up" href="${gameHref(p.chart.store, p.chart.appId)}" title="Hạng tốt nhất trong các bảng đang theo dõi">#${p.chart.rank} · ${p.chart.charts} bảng</a>` : ""}
+          <span class="tag">${esc(PL_TYPE[p.type] ?? p.type)}</span>
+          ${p.category ? `<span class="tag">${esc(p.category)}</span>` : ""}
+          <a class="tag link" href="${safeUrl(p.url)}" target="_blank" rel="noopener">↗</a>
+          ${p.store ? `<a class="tag link" href="${safeUrl(p.store)}" target="_blank" rel="noopener">Store</a>` : ""}
+        </div>
+      </div>
+    </article>`;
+  }).join("") : `<div class="panel muted center">${plData.items.length ? "Không có playable phù hợp." : `Chưa có dữ liệu. Bấm "Lấy lại" (khoảng 30 giây) hoặc chờ quy trình hằng ngày.`}</div>`;
+}
+
+function openPlayable(p) {
+  plCurrent = p;
+  $("#pl-modal-title").textContent = p.name;
+  $("#pl-modal-sub").textContent = `${p.source}${p.category ? " · " + p.category : ""}${p.chart ? ` · đang #${p.chart.rank} trong chart` : ""}`;
+  $("#pl-modal-open").href = p.url;
+  $("#pl-phone").classList.remove("land");
+  playableFrame();
+  $("#pl-modal").hidden = false;
+  document.body.classList.add("pl-open");
+  $("#pl-modal [data-pl=close]").focus();
+}
+
+// Chặn playable điều hướng cả trang khi bấm nút tải game; link store vẫn mở được ở tab mới
+function playableFrame() {
+  $("#pl-phone").innerHTML = `<iframe src="${safeUrl(plCurrent.url)}" title="${esc(plCurrent.name)}"
+    sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" allow="autoplay; fullscreen"></iframe>`;
+}
+
+function closePlayable() {
+  $("#pl-modal").hidden = true;
+  $("#pl-phone").innerHTML = "";
+  document.body.classList.remove("pl-open");
+  plCurrent = null;
+}
+
 // ================= Tóm tắt =================
 async function loadDigest(date) {
   setNotice(null);
@@ -739,7 +902,7 @@ async function runGlobalSearch() {
 
 // ================= trạng thái cập nhật =================
 let wasRunning = false;
-const STEP_LABEL = { charts: "bảng xếp hạng", publishers: "nhà phát hành", news: "tin ngành", ads: "quảng cáo", digest: "tóm tắt", publish: "bản công khai" };
+const STEP_LABEL = { charts: "bảng xếp hạng", publishers: "nhà phát hành", news: "tin ngành", ads: "quảng cáo", playables: "thư viện playable", newgames: "game mới", digest: "tóm tắt", publish: "bản công khai" };
 
 async function pollStatus() {
   let s;
@@ -766,7 +929,7 @@ async function pollStatus() {
 }
 
 // ================= điều hướng =================
-const TAB_VIEWS = ["overview", "digest", "chart", "publishers", "news", "ads"];
+const TAB_VIEWS = ["overview", "digest", "chart", "publishers", "news", "newgames", "ads", "playables"];
 
 function show(v) {
   view = v;
@@ -791,6 +954,8 @@ function route() {
   if (v === "digest") return loadDigest();
   if (v === "publishers") return loadPublishers();
   if (v === "ads") return loadAds();
+  if (v === "playables") return loadPlayables();
+  if (v === "newgames") return loadNewGames();
 }
 
 async function init() {
@@ -823,6 +988,39 @@ async function init() {
   for (const id of ["ads-sort", "ads-source", "ads-game", "ads-format", "ads-min-days", "ads-new", "ads-active"]) $("#" + id).addEventListener("change", loadAds);
   let adsQTimer;
   $("#ads-q").addEventListener("input", () => { clearTimeout(adsQTimer); adsQTimer = setTimeout(loadAds, 250); });
+  for (const id of ["ng-store", "ng-days", "ng-sort", "ng-noclone", "ng-nochart"]) $("#" + id).addEventListener("change", renderNewGames);
+  $("#ng-q").addEventListener("input", renderNewGames);
+  $("#ng-trends").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-trend]");
+    if (!b) return;
+    ngTrend = ngTrend === b.dataset.trend ? null : b.dataset.trend;
+    renderNewGames();
+  });
+  $("#ng-refresh").addEventListener("click", async () => {
+    const r = await post("/api/newgames/refresh");
+    if (!r.started) setNotice("Đang có quy trình cập nhật khác chạy, thử lại sau.");
+    setTimeout(() => loadNewGames(true), 1500);
+  });
+  for (const id of ["pl-sort", "pl-source", "pl-type", "pl-chart", "pl-new"]) $("#" + id).addEventListener("change", renderPlayables);
+  $("#pl-q").addEventListener("input", renderPlayables);
+  $("#pl-refresh").addEventListener("click", async () => {
+    await post("/api/playables/refresh");
+    $("#pl-refresh").disabled = true;
+    setTimeout(() => loadPlayables(true), 1500);
+  });
+  // Cửa sổ chơi thử playable
+  $("#pl-modal").addEventListener("click", (e) => {
+    const act = e.target.closest("[data-pl]")?.dataset.pl;
+    if (e.target === $("#pl-modal") || act === "close") closePlayable();
+    if (act === "reload") playableFrame();
+    if (act === "rotate") $("#pl-phone").classList.toggle("land");
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#pl-modal").hidden) closePlayable(); });
+  $("#pl-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pl-play]");
+    if (b) openPlayable(plData.items[Number(b.dataset.plPlay)]);
+  });
+
   $("#ads-refresh").addEventListener("click", async () => {
     const r = await post("/api/ads/refresh");
     if (!r.started) setNotice("Đang có quy trình cập nhật khác chạy, thử lại sau.");

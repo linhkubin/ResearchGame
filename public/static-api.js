@@ -91,6 +91,8 @@ export async function staticApi(path, opts) {
     case "publisher": return (await load(`publisher/${q.get("store")}-${fileKey(q.get("devId"))}.json`)) ?? { notFound: true };
     case "digest": return (await load(`digest/${q.get("date") || "latest"}.json`)) ?? { digest: null, dates: [] };
     case "ads": return ads(q);
+    case "newgames": return (await load("newgames.json")) ?? { items: [], trends: [], status: {} };
+    case "playables": return (await load("playables.json")) ?? { items: [], sources: [], status: {} };
     // Bản tĩnh: chỉ có số quảng cáo Meta đã quét và nhà phát hành đang theo dõi
     case "ads/counts": {
       const g = await game(q);

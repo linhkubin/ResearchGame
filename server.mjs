@@ -16,6 +16,8 @@ import { adCounts } from "./lib/adsources.mjs";
 import { getDigest, buildDigest, hasDigest } from "./lib/digest.mjs";
 import { runDaily, dailyStatus } from "./lib/daily.mjs";
 import { listAds, runAdsFetch, adsStatus, scanOne, unfollowGame, gameKeyForApp } from "./lib/ads.mjs";
+import { listPlayables, runPlayablesFetch, playablesStatus } from "./lib/playables.mjs";
+import { listNewGames, runNewGamesFetch, newGamesStatus } from "./lib/newgames.mjs";
 
 const PUBLIC = join(import.meta.dirname, "public");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
@@ -114,6 +116,18 @@ const routes = {
   "POST /api/ads/refresh": () => {
     const started = !adsStatus.running && !dailyStatus.running;
     if (started) runAdsFetch().catch((e) => console.error("[ads] lỗi:", e));
+    return { started };
+  },
+  "GET /api/newgames": () => listNewGames(),
+  "POST /api/newgames/refresh": () => {
+    const started = !newGamesStatus.running && !dailyStatus.running;
+    if (started) runNewGamesFetch().catch((e) => console.error("[newgames] lỗi:", e));
+    return { started };
+  },
+  "GET /api/playables": () => listPlayables(),
+  "POST /api/playables/refresh": () => {
+    const started = !playablesStatus.running;
+    if (started) runPlayablesFetch().catch((e) => console.error("[playables] lỗi:", e));
     return { started };
   },
   "POST /api/ads/scan": async (q, body) => scanOne(body.store, body.appId),

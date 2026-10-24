@@ -37,6 +37,10 @@ Gỡ tác vụ: `Unregister-ScheduledTask -TaskName "ChartTracker Daily"` (Power
   - Cần Edge hoặc Chrome trên máy (chạy ẩn qua `puppeteer-core`). Cấu hình ở `ADS` trong `lib/config.mjs` (quốc gia, số game, trọng số điểm).
   - Meta không phân biệt playable và không công bố chi tiêu/lượt hiển thị; playable chạy trên AppLovin/Unity/Mintegral cần công cụ trả phí.
   - Link ảnh/video của Meta hết hạn sau vài ngày; quét lại sẽ làm mới.
+- **Game mới**: game mới phát hành (60 ngày) chưa cần vào top, quét riêng từng store mỗi ngày theo từ khoá thể loại (`NEW_GAMES.terms`, Mỹ): App Store qua iTunes Search API (có sẵn ngày phát hành, số đánh giá); Google Play qua tìm kiếm rồi lan theo "game tương tự" của các game mới tìm được, tra chi tiết từng app (app đã tra được nhớ trong `ng_checked`). Lưu lượt cài / số đánh giá mỗi ngày để tính tốc độ và mức tăng 7 ngày; "Đà tăng" là phân vị tốc độ trong cùng store. Mục "Kiểu game đang bị clone" gom tên game có từ 3 studio cùng ra. Lần quét đầu khoảng 12 phút, các lần sau vài phút.
+  - Không phải toàn bộ game mới trên store: chỉ game lọt kết quả tìm kiếm của các từ khoá. Thêm từ khoá để mở rộng.
+- **Playable**: thư viện playable ads chơi được ngay, lấy từ API/JSON công khai trên trang showcase của Playable Factory, Playin, Playturbo (Mintegral) và vài link lẻ từ portfolio studio (`PLAYABLES.manual` trong `lib/config.mjs`). Cập nhật cùng quy trình hằng ngày (khoảng 30 giây, link chết bị ẩn). Lọc theo nguồn, loại (game/thương hiệu/ứng dụng), chỉ game đang trong chart, chỉ mới thấy; game có trong chart được gắn hạng tốt nhất và link sang trang game. Bấm ảnh để chơi trong khung điện thoại (xoay dọc/ngang, chơi lại, mở tab mới).
+  - Đây là playable studio làm cho khách hoặc bản demo, không phải toàn bộ playable đang chạy trên thị trường. Code ở `lib/playables.mjs`; trang nguồn đổi cấu trúc thì sửa hàm tương ứng.
 
 ## Bản công khai (GitHub Pages)
 

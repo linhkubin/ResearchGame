@@ -32,7 +32,9 @@
     <a class="tab" href="#/chart" data-tab="chart">Bảng xếp hạng</a>
     <a class="tab" href="#/publishers" data-tab="publishers">Nhà phát hành</a>
     <a class="tab" href="#/news" data-tab="news">Tin ngành</a>
+    <a class="tab" href="#/newgames" data-tab="newgames">Game mới</a>
     <a class="tab" href="#/ads" data-tab="ads">Quảng cáo</a>
+    <a class="tab" href="#/playables" data-tab="playables">Playable</a>
   </nav>
 
   <section class="controls" id="controls">
@@ -87,6 +89,47 @@
     <span class="for-ads check"><label><input type="checkbox" id="ads-active"> Chỉ đang chạy</label></span>
     <span class="for-ads grow"><input id="ads-q" type="search" placeholder="Tìm trong tiêu đề / nội dung…"></span>
     <span class="for-ads"><button id="ads-refresh" class="btn">Quét lại</button></span>
+
+    <span class="for-newgames"><label>Store <select id="ng-store">
+      <option value="">Cả hai</option>
+      <option value="gplay">Google Play</option>
+      <option value="ios">App Store</option>
+    </select></label></span>
+    <span class="for-newgames"><label>Phát hành trong <select id="ng-days">
+      <option value="7">7 ngày</option>
+      <option value="14">14 ngày</option>
+      <option value="30" selected>30 ngày</option>
+      <option value="60">60 ngày</option>
+    </select></label></span>
+    <span class="for-newgames"><label>Sắp xếp <select id="ng-sort">
+      <option value="momentum">Đà tăng</option>
+      <option value="gain">Tăng 7 ngày qua</option>
+      <option value="size">Lượt cài / đánh giá</option>
+      <option value="released">Mới phát hành</option>
+      <option value="found">Mới phát hiện</option>
+    </select></label></span>
+    <span class="for-newgames check"><label><input type="checkbox" id="ng-noclone"> Ẩn game trùng tên (clone)</label></span>
+    <span class="for-newgames check"><label><input type="checkbox" id="ng-nochart"> Ẩn game đã vào chart</label></span>
+    <span class="for-newgames grow"><input id="ng-q" type="search" placeholder="Tìm tên game / nhà phát hành / thể loại…"></span>
+    <span class="for-newgames"><button id="ng-refresh" class="btn">Quét lại</button></span>
+
+    <span class="for-playables"><label>Sắp xếp <select id="pl-sort">
+      <option value="chart">Game đang trong chart trước</option>
+      <option value="new">Mới thấy</option>
+      <option value="name">Tên A-Z</option>
+      <option value="source">Nguồn</option>
+    </select></label></span>
+    <span class="for-playables"><label>Nguồn <select id="pl-source"><option value="">Tất cả</option></select></label></span>
+    <span class="for-playables"><label>Loại <select id="pl-type">
+      <option value="game">Game</option>
+      <option value="">Tất cả</option>
+      <option value="brand">Thương hiệu</option>
+      <option value="app">Ứng dụng</option>
+    </select></label></span>
+    <span class="for-playables check"><label><input type="checkbox" id="pl-chart"> Chỉ game đang trong chart</label></span>
+    <span class="for-playables check"><label><input type="checkbox" id="pl-new"> Chỉ mới thấy</label></span>
+    <span class="for-playables grow"><input id="pl-q" type="search" placeholder="Tìm tên game / thể loại…"></span>
+    <span class="for-playables"><button id="pl-refresh" class="btn">Lấy lại</button></span>
   </section>
 
   <div id="notice" class="notice" hidden></div>
@@ -139,9 +182,35 @@
       <p class="hint" id="ads-meta"></p>
       <div id="ads-list" class="ad-grid"></div>
     </section>
+    <section id="view-newgames" class="view" hidden>
+      <p class="hint" id="ng-meta"></p>
+      <div id="ng-trends" class="panel" hidden></div>
+      <div class="panel flush"><div class="table-wrap"><table>
+        <thead><tr><th>Game</th><th>Phát hành</th><th class="num">Lượt cài / đánh giá</th><th class="num hide-sm">Tốc độ</th>
+          <th class="num hide-sm">Tăng</th><th>Đà tăng</th><th class="hide-sm">Tìm thấy qua</th></tr></thead>
+        <tbody id="ng-body"></tbody>
+      </table></div></div>
+    </section>
+    <section id="view-playables" class="view" hidden>
+      <p class="hint" id="pl-meta"></p>
+      <div id="pl-list" class="pl-grid"></div>
+    </section>
     <section id="view-game" class="view" hidden></section>
     <section id="view-publisher" class="view" hidden></section>
   </main>
+
+  <div id="pl-modal" class="pl-modal" hidden>
+    <div class="pl-dialog" role="dialog" aria-modal="true" aria-labelledby="pl-modal-title">
+      <div class="pl-modal-head">
+        <div class="grow"><strong id="pl-modal-title"></strong><div class="muted" id="pl-modal-sub"></div></div>
+        <button class="btn" data-pl="rotate" title="Xoay dọc/ngang">⟲ Xoay</button>
+        <button class="btn" data-pl="reload" title="Chơi lại từ đầu">↻ Chơi lại</button>
+        <a class="btn" id="pl-modal-open" target="_blank" rel="noopener">↗ Tab mới</a>
+        <button class="btn" data-pl="close" aria-label="Đóng">✕</button>
+      </div>
+      <div class="pl-stage"><div class="pl-phone" id="pl-phone"></div></div>
+    </div>
+  </div>
 
   <script src="app.js" type="module"></script>
 </body>
