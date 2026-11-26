@@ -1,5 +1,6 @@
 // ================= tiện ích chung =================
 import { staticApi } from "./static-api.js";
+import { puzzleKind, matchPuzzle, countKinds, setPuzzleIds, puzzleKindName } from "./puzzle.js";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -54,6 +55,49 @@ function savePrefs() {
   try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {}
 }
 
+// ---------- lọc game puzzle (thanh #genre-bar, dùng chung mọi tab danh sách game) ----------
+// genre: "" = mọi game, "puzzle" = mọi puzzle, còn lại = một kiểu trong PUZZLE_KINDS (public/puzzle.js)
+let genre = prefs.genre ?? "";
+const pzTag = (kind) => (kind ? `<span class="tag pz" title="Kiểu puzzle (đoán theo tên game)">${esc(puzzleKindName(kind))}</span>` : "");
+
+// Lọc danh sách theo lựa chọn puzzle; toKey(item) -> { title, store, appId, hint }.
+// Đồng thời vẽ thanh lọc với số game của từng kiểu trong danh sách (trước khi lọc puzzle).
+// unique(item): khoá gộp khi một game xuất hiện nhiều lần (vd nhiều bảng), để đếm theo game chứ không theo dòng
+function puzzleFilter(items, toKey, unique) {
+  const seen = new Map();
+  const tagged = items.map((it) => {
+    const kind = puzzleKind(toKey(it));
+    if (unique) seen.set(unique(it), kind);
+    return { it, kind };
+  });
+  const kinds = unique ? [...seen.values()] : tagged.map((t) => t.kind);
+  renderGenreBar(kinds);
+  return tagged.filter((t) => matchPuzzle(genre, t.kind));
+}
+
+function renderGenreBar(kinds) {
+  const total = kinds.length, nPuzzle = kinds.filter(Boolean).length;
+  const list = countKinds(kinds);
+  // Kiểu đang chọn mà danh sách này không có: vẫn hiện (số 0) để bỏ chọn được
+  if (genre && genre !== "puzzle" && !list.some((k) => k.key === genre)) list.push({ key: genre, name: puzzleKindName(genre), n: 0 });
+  const chip = (key, name, n) =>
+    `<button class="genre-chip${genre === key ? " on" : ""}${n ? "" : " zero"}" data-genre="${esc(key)}">${esc(name)}<span class="n">${n}</span></button>`;
+  $("#genre-bar").innerHTML = `<span class="gb-label">Puzzle</span>`
+    + chip("", "Mọi game", total) + chip("puzzle", "Tất cả puzzle", nPuzzle)
+    + list.map((k) => chip(k.key, k.name, k.n)).join("")
+    + `<span class="gb-hint" title="Puzzle = từng vào bảng Puzzle của store trong 30 ngày, hoặc tên/thể loại có từ khoá puzzle. Kiểu game đoán theo từ khoá trong tên.">Kiểu game đoán theo tên ⓘ</span>`;
+}
+
+function setGenre(g) {
+  genre = g;
+  prefs.genre = g;
+  savePrefs();
+  if (view === "chart") renderChart();
+  else if (view === "newgames") renderNewGames();
+  else if (view === "playables") renderPlayables();
+  else route();
+}
+
 const nameOf = (list, key, field = "key") => list.find((x) => x[field] === key)?.name ?? key;
 const comboLabel = (c) => `${nameOf(meta.countries, c.country, "code")} · ${nameOf(meta.categories, c.category)} · ${nameOf(meta.collections, c.collection)}`;
 
@@ -101,11 +145,11 @@ function appCell(a) {
 }
 
 // Một dòng game trong danh sách (Tổng quan, Tóm tắt)
-function listItem(it, extra = "") {
+function listItem(it, extra = "", kind = null) {
   const move = it.prevRank ? `#${it.prevRank} → #${it.rank}` : `#${it.rank}`;
   return `<li><a class="row-link" href="${gameHref(it.store, it.appId)}">
     ${appCell(it)}
-      <div class="tags">${extra || `<span class="tag">${esc(it.storeName)} · ${esc(it.categoryName)} · ${esc(it.collectionName)}</span>`}</div>
+      <div class="tags">${pzTag(kind)}${extra || `<span class="tag">${esc(it.storeName)} · ${esc(it.categoryName)} · ${esc(it.collectionName)}</span>`}</div>
     </div>
     <div class="right">${it.prevRank ? deltaBadge(it) : `<span class="badge new">MỚI</span>`}<div class="rankmove">${move}</div></div>
   </a></li>`;
@@ -115,17 +159,37 @@ const multiTags = (m) => m.hits.map((h) =>
   `<span class="tag">${esc(h.storeName)} · ${esc(h.categoryName)} · ${esc(h.collectionName)} ${h.prevRank ? `▲${h.delta}` : "mới"}</span>`).join("");
 
 // ================= Tổng quan =================
+let ovCache = null;
 async function loadOverview() {
   const country = $("#country").value, compare = $("#compare").value;
-  const ov = await api(`/api/overview?country=${country}&compare=${compare}`);
+  // Giữ bản vừa tải: đổi lựa chọn puzzle chỉ lọc lại, không gọi lại API (lần đầu có thể mất vài giây)
+  const key = `${country}-${compare}`;
+  if (ovCache?.key !== key) ovCache = { key, ov: await api(`/api/overview?country=${country}&compare=${compare}`) };
+  const ov = ovCache.ov;
   const noCompare = ov.compared === 0;
   const msg = !ov.latest ? "Chưa có dữ liệu." : noCompare ? "Cần ít nhất 2 ngày dữ liệu để so sánh." : "Không có.";
   setNotice(ov.latest && noCompare
     ? `Mới có dữ liệu ngày ${fmtDate(ov.latest)}. Mục tăng hạng và game mới sẽ xuất hiện từ lần cập nhật ngày tiếp theo.`
     : null);
-  $("#ov-multi").innerHTML = ov.multi.length ? ov.multi.slice(0, 30).map((m) => listItem(m, multiTags(m))).join("") : emptyLi(msg);
-  $("#ov-climbers").innerHTML = ov.climbers.length ? ov.climbers.slice(0, 40).map((x) => listItem(x)).join("") : emptyLi(msg);
-  $("#ov-new").innerHTML = ov.newcomers.length ? ov.newcomers.slice(0, 40).map((x) => listItem(x)).join("") : emptyLi(msg);
+  const lists = rankLists(ov);
+  const none = genre ? "Không có game thuộc kiểu puzzle đang chọn." : msg;
+  const fill = (el, rows, max, withMulti) => {
+    $(el).innerHTML = rows.length ? rows.slice(0, max).map(({ it, kind }) => listItem(it, withMulti ? multiTags(it) : "", kind)).join("")
+      : emptyLi(ov.latest && !noCompare ? none : msg);
+  };
+  fill("#ov-multi", lists.multi, 30, true);
+  fill("#ov-climbers", lists.climbers, 40);
+  fill("#ov-new", lists.newcomers, 40);
+}
+
+// Lọc puzzle cho bộ ba danh sách (Tổng quan, mỗi quốc gia trong Tóm tắt); thanh lọc đếm theo game, không theo dòng
+const rankKey = (x) => ({ title: x.title, store: x.store, appId: x.appId, hint: x.category === "puzzle" ? "puzzle" : "" });
+function rankLists(src, extraUnique = []) {
+  const all = [...src.multi.map((x) => ["multi", x]), ...src.climbers.map((x) => ["climbers", x]), ...src.newcomers.map((x) => ["newcomers", x]), ...extraUnique];
+  const kept = puzzleFilter(all, ([, x]) => rankKey(x), ([, x]) => `${x.store}:${x.appId}`);
+  const out = { multi: [], climbers: [], newcomers: [], extra: [] };
+  for (const { it: [list, x], kind } of kept) out[list in out ? list : "extra"].push({ it: x, kind });
+  return out;
 }
 
 // ================= Bảng xếp hạng =================
@@ -149,18 +213,19 @@ function renderChart() {
   const q = norm($("#search").value.trim());
   const mv = $("#movement").value;
   const store = $("#store").value;
-  const rows = chartData.rows.filter((r) => {
+  const cat = $("#category").value;
+  const rows = puzzleFilter(chartData.rows.filter((r) => {
     if (q && !norm(`${r.title} ${r.developer}`).includes(q)) return false;
     if (mv === "up") return r.delta > 0;
     if (mv === "down") return r.delta < 0;
     if (mv === "new") return r.isNew;
     return true;
-  });
-  $("#chart-body").innerHTML = rows.length ? rows.map((r) => `
+  }), (r) => ({ title: r.title, store, appId: r.appId, hint: cat === "puzzle" ? "puzzle" : "" }));
+  $("#chart-body").innerHTML = rows.length ? rows.map(({ it: r, kind }) => `
     <tr data-href="${gameHref(store, r.appId)}">
       <td class="num rank">${r.rank}</td>
       <td class="num">${deltaBadge(r)}</td>
-      <td><a class="game" href="${gameHref(store, r.appId)}">${appCell(r)}</div></a></td>
+      <td><a class="game" href="${gameHref(store, r.appId)}">${appCell(r)}${kind ? `<div class="tags">${pzTag(kind)}</div>` : ""}</div></a></td>
       <td class="hide-sm">${sparkline(r.spark)}</td>
       <td class="num hide-sm">${r.score != null ? r.score.toFixed(1) : `<span class="muted">–</span>`}</td>
       <td class="hide-sm muted">${fmtDate(r.firstSeen)}</td>
@@ -312,8 +377,11 @@ async function loadAds() {
     + `${Math.round(w.days * 100)}% số ngày chạy + ${Math.round(w.impressions * 100)}% thứ tự hiển thị nguồn trả về + ${Math.round(w.variants * 100)}% số bản nhân (App Store: số nước; Google: số QC dùng cùng video) + ${Math.round(w.platforms * 100)}% số nền tảng; `
     + `quảng cáo đã dừng nhân ${d.stoppedFactor ?? 0.7}. Không nguồn nào công khai lượt xem nên số ngày chạy là chỉ số chính (di chuột lên điểm để xem chi tiết). Playable AppLovin/Unity cần công cụ trả phí.`;
   $("#ads-refresh").disabled = st.running;
-  $("#ads-list").innerHTML = d.items.length ? d.items.map(adCard).join("")
-    : `<div class="panel muted center">${d.games.length ? "Không có quảng cáo phù hợp." : `Chưa quét quảng cáo. Bấm "Quét lại" (khoảng 30 giây mỗi game) hoặc chờ quy trình hằng ngày.`}</div>`;
+  // Thanh puzzle đếm theo game (nhiều quảng cáo cùng một game chỉ tính một lần)
+  const adItems = puzzleFilter(d.items, (a) => ({ title: a.gameName, store: a.store, appId: a.appId }), (a) => `${a.store}:${a.appId}`).map((t) => t.it);
+  if (genre && adItems.length !== d.items.length) $("#ads-meta").insertAdjacentHTML("afterbegin", `<strong>${adItems.length}/${d.items.length} quảng cáo thuộc kiểu puzzle đang chọn.</strong> `);
+  $("#ads-list").innerHTML = adItems.length ? adItems.map(adCard).join("")
+    : `<div class="panel muted center">${d.items.length ? "Không có quảng cáo của game thuộc kiểu puzzle đang chọn." : d.games.length ? "Không có quảng cáo phù hợp." : `Chưa quét quảng cáo. Bấm "Quét lại" (khoảng 30 giây mỗi game) hoặc chờ quy trình hằng ngày.`}</div>`;
   clearTimeout(adsPollTimer);
   if (st.running) adsPollTimer = setTimeout(() => view === "ads" && loadAds(), 4000);
 }
@@ -343,9 +411,45 @@ async function loadGameAds(app) {
 // ================= Game mới =================
 let ngData = null;
 let ngTrend = null;
+let ngTab = "all";   // tab phụ: "all" | "puzzle" (#/newgames/puzzle)
+let ngKind = "";     // kiểu puzzle đang chọn trong tab phụ Puzzle
+const NG_SELECTS = ["ng-store", "ng-days", "ng-sort", "ng-genre", "ng-size", "ng-momentum", "ng-score", "ng-found", "ng-term"];
+const NG_CHECKS = ["ng-noclone", "ng-nochart", "ng-rising", "ng-followed"];
+// Quy mô tối thiểu: [lượt cài Android, số đánh giá iOS]
+const NG_SIZE = { 1: [1e3, 10], 2: [1e4, 100], 3: [1e5, 1000], 4: [1e6, 10000] };
+const GENRE_ALIAS = { Roleplaying: "Role Playing", "Role-Playing": "Role Playing" };
+const ngGenres = (i) => [...new Set(String(i.genre ?? "").split(",").map((g) => g.trim()).filter((g) => g && g !== "Games" && g !== "Entertainment").map((g) => GENRE_ALIAS[g] ?? g))];
+// Thể loại store + từ khoá đã tìm ra game (vd "sort puzzle") giúp nhận puzzle
+const ngKindOf = (i) => puzzleKind({ title: i.title, store: i.store, appId: i.appId, hint: `${i.genre ?? ""} ${i.foundBy ?? ""}` });
+const ngSize = (i) => (i.store === "gplay" ? i.minInstalls ?? 0 : (i.ratings ?? 0) * 100);
+const ngGain = (i) => (i.store === "gplay" ? i.installsGain ?? 0 : (i.ratingsGain ?? 0) * 100);
+
+function saveNgPrefs() {
+  prefs.ng = {};
+  for (const id of NG_SELECTS) prefs.ng[id] = $("#" + id).value;
+  for (const id of NG_CHECKS) prefs.ng[id] = $("#" + id).checked;
+  prefs.ngKind = ngKind;
+  savePrefs();
+}
+
+// Danh sách thể loại và từ khoá (kèm số game) cho hai ô chọn
+function fillNgOptions() {
+  const count = (keysOf) => {
+    const m = new Map();
+    for (const i of ngData.items) for (const k of keysOf(i)) m.set(k, (m.get(k) ?? 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1]);
+  };
+  const fill = (id, all, list) => {
+    const cur = $("#" + id).value || prefs.ng?.[id] || "";
+    $("#" + id).innerHTML = `<option value="">${all}</option>` + list.map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n})</option>`).join("");
+    if (list.some(([k]) => k === cur)) $("#" + id).value = cur;
+  };
+  fill("ng-genre", "Tất cả thể loại", count(ngGenres));
+  fill("ng-term", "Tất cả từ khoá", count((i) => (i.foundBy ? [i.foundBy] : [])));
+}
 
 async function loadNewGames(force = false) {
-  if (!ngData || force) ngData = await api("/api/newgames");
+  if (!ngData || force) { ngData = await api("/api/newgames"); fillNgOptions(); }
   setNotice(null);
   renderNewGames();
   const st = ngData.status;
@@ -355,28 +459,63 @@ async function loadNewGames(force = false) {
 
 function renderNewGames() {
   if (!ngData) return;
-  const store = $("#ng-store").value, days = Number($("#ng-days").value), needle = norm($("#ng-q").value.trim());
-  const noClone = $("#ng-noclone").checked, noChart = $("#ng-nochart").checked;
-  let items = ngData.items.filter((i) => (!store || i.store === store) && i.age <= days
-    && (!noClone || !i.cluster) && (!noChart || !i.chart)
+  const v = (id) => $("#" + id).value, on = (id) => $("#" + id).checked;
+  const store = v("ng-store"), days = Number(v("ng-days")), needle = norm(v("ng-q").trim());
+  const genreSel = v("ng-genre"), term = v("ng-term"), minSize = NG_SIZE[v("ng-size")], minMom = Number(v("ng-momentum")) || 0;
+  const minScore = Number(v("ng-score")) || 0, foundDays = Number(v("ng-found")) || 0;
+  const foundSince = foundDays ? new Date(Date.now() - (foundDays - 1) * 864e5).toLocaleDateString("sv-SE") : "";
+  // Mọi bộ lọc trừ kiểu puzzle (các thẻ kiểu puzzle đếm trên tập này)
+  const base = ngData.items.filter((i) => (!store || i.store === store) && i.age <= days
+    && (!on("ng-noclone") || !i.cluster) && (!on("ng-nochart") || !i.chart)
+    && (!on("ng-rising") || ngGain(i) > 0) && (!on("ng-followed") || i.followed)
+    && (!genreSel || ngGenres(i).includes(genreSel)) && (!term || i.foundBy === term)
+    && (!minSize || (i.store === "gplay" ? (i.minInstalls ?? 0) >= minSize[0] : (i.ratings ?? 0) >= minSize[1]))
+    && i.momentum >= minMom && (!minScore || (i.score ?? 0) >= minScore)
+    && (!foundSince || (i.firstSeen ?? "") >= foundSince)
     && (!ngTrend || norm(i.title).replace(/[^\p{L}\p{N}]+/gu, " ").includes(ngTrend))
     && (!needle || norm(`${i.title} ${i.developer} ${i.genre}`).includes(needle)));
-  const size = (i) => (i.store === "gplay" ? i.minInstalls ?? 0 : (i.ratings ?? 0) * 100);
-  const gain = (i) => (i.store === "gplay" ? i.installsGain ?? 0 : (i.ratingsGain ?? 0) * 100);
+  const kindOf = new Map(base.map((i) => [i, ngKindOf(i)]));
+  const puzzles = base.filter((i) => kindOf.get(i));
+  let items = ngTab === "puzzle" ? puzzles.filter((i) => !ngKind || kindOf.get(i) === ngKind) : base;
   const sorters = {
-    momentum: (a, b) => b.momentum - a.momentum || size(b) - size(a),
-    gain: (a, b) => gain(b) - gain(a) || b.momentum - a.momentum,
-    size: (a, b) => size(b) - size(a),
+    momentum: (a, b) => b.momentum - a.momentum || ngSize(b) - ngSize(a),
+    gain: (a, b) => ngGain(b) - ngGain(a) || b.momentum - a.momentum,
+    size: (a, b) => ngSize(b) - ngSize(a),
+    score: (a, b) => (b.score ?? 0) - (a.score ?? 0) || (b.ratings ?? 0) - (a.ratings ?? 0),
     released: (a, b) => b.released.localeCompare(a.released) || b.momentum - a.momentum,
     found: (a, b) => b.firstSeen.localeCompare(a.firstSeen) || b.released.localeCompare(a.released),
   };
-  items = [...items].sort(sorters[$("#ng-sort").value] ?? sorters.momentum);
+  items = [...items].sort(sorters[v("ng-sort")] ?? sorters.momentum);
+
+  // Tab phụ
+  $("#ng-tabs").innerHTML = [["all", "#/newgames", "Tất cả game", base.length], ["puzzle", "#/newgames/puzzle", "Puzzle", puzzles.length]]
+    .map(([k, href, name, n]) => `<a class="subtab${ngTab === k ? " active" : ""}" href="${href}">${name} <span class="n">${n}</span></a>`).join("");
+
+  // Tab phụ Puzzle: một thẻ cho mỗi kiểu puzzle (số game, game ra 7 ngày qua, số studio, game dẫn đầu). Bấm để lọc.
+  const pzEl = $("#ng-puzzle");
+  pzEl.hidden = ngTab !== "puzzle";
+  if (ngTab === "puzzle") {
+    const card = (key, name, list) => {
+      const top = [...list].sort(sorters.momentum)[0];
+      const fresh = list.filter((i) => i.age <= 7).length, devs = new Set(list.map((i) => i.developer)).size;
+      const rising = list.filter((i) => ngGain(i) > 0).length;
+      return `<button class="pz-card${ngKind === key ? " on" : ""}${list.length ? "" : " zero"}" data-ng-kind="${esc(key)}">
+        <span class="pz-name">${esc(name)}</span><span class="pz-n">${list.length}</span>
+        <span class="pz-sub">${fresh ? `<b class="up">${fresh} mới 7 ngày</b> · ` : ""}${devs} studio${rising ? ` · ${rising} đang tăng` : ""}</span>
+        <span class="pz-top">${top ? `Dẫn đầu: ${esc(top.title)}` : "Chưa có game"}</span></button>`;
+    };
+    const kinds = countKinds(puzzles.map((i) => kindOf.get(i))).sort((a, b) => b.n - a.n);
+    if (ngKind && !kinds.some((k) => k.key === ngKind)) kinds.push({ key: ngKind, name: puzzleKindName(ngKind) });
+    pzEl.innerHTML = `<div class="panel-head"><h2>Game puzzle mới theo kiểu</h2></div>
+      <p class="hint">Đếm theo các bộ lọc đang chọn ở trên (store, số ngày, quy mô…). Kiểu game đoán theo từ khoá trong tên; bấm một thẻ để chỉ xem kiểu đó, bấm lại để bỏ.</p>
+      <div class="pz-grid">${card("", "Tất cả puzzle", puzzles)}${kinds.map((k) => card(k.key, k.name, puzzles.filter((i) => kindOf.get(i) === k.key))).join("")}</div>`;
+  }
 
   const st = ngData.status;
   const n = (s) => ngData.items.filter((i) => i.store === s).length;
   const errs = st.errors?.length ? ` · ${st.errors.length} lỗi` : "";
   $("#ng-meta").innerHTML = (st.running ? `Đang quét ${st.done}/${st.total} từ khoá (${esc(st.step ?? "")})… ` : "")
-    + `${items.length} game · tổng ${n("gplay")} Google Play + ${n("ios")} App Store phát hành trong ${ngData.days} ngày · quét ${st.lastFetch ? fmtDate(st.lastFetch) : "chưa"}${errs}. `
+    + `<strong>${items.length} game</strong>${ngTab === "puzzle" ? ` puzzle${ngKind ? ` kiểu ${esc(puzzleKindName(ngKind))}` : ""}` : ""} · tổng ${n("gplay")} Google Play + ${n("ios")} App Store phát hành trong ${ngData.days} ngày · quét ${st.lastFetch ? fmtDate(st.lastFetch) : "chưa"}${errs}. `
     + `Quét riêng từng store theo ${ngData.terms} từ khoá thể loại (Mỹ); Google Play lan thêm theo "game tương tự". `
     + `Đà tăng = phân vị tốc độ trong cùng store (Android: lượt cài/ngày theo mốc của Google; iOS: đánh giá/ngày). Không phải toàn bộ game mới trên store.`;
 
@@ -399,17 +538,17 @@ function renderNewGames() {
     return `<tr>
       <td><a class="game" href="${href}"${ext}>${iconImg(i)}<div class="meta">
         <div class="title">${esc(i.title)}</div><div class="dev">${esc(i.developer)}</div>
-        <div class="tags">${storeBadge(i.store)}
+        <div class="tags">${storeBadge(i.store)}${pzTag(kindOf.get(i))}
           ${i.chart ? `<span class="tag up">đã vào chart #${i.chart.rank}</span>` : ""}
           ${i.followed ? `<span class="tag">NPH đang theo dõi</span>` : ""}
           ${i.cluster ? `<span class="tag" title="Số studio cùng ra game trùng tên">${i.cluster} bản trùng tên</span>` : ""}
-          ${i.genre ? `<span class="tag hide-sm">${esc(i.genre)}</span>` : ""}</div></div></a></td>
+          ${ngGenres(i).map((g) => `<span class="tag hide-sm">${esc(g)}</span>`).join("")}</div></div></a></td>
       <td>${fmtDate(i.released)}<div class="muted">${i.age} ngày</div></td>
       <td class="num">${sizeTxt}</td>
       <td class="num hide-sm">${speed}</td>
       <td class="num hide-sm">${gainTxt}</td>
       <td><span class="ng-bar" title="${i.momentum}/100"><i style="width:${i.momentum}%"></i></span> <span class="muted">${i.momentum}</span></td>
-      <td class="hide-sm muted">${esc(i.foundBy ?? "")}</td>
+      <td class="hide-sm muted">${esc(i.foundBy ?? "")}${i.firstSeen ? `<div>thấy ${fmtDate(i.firstSeen)}</div>` : ""}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="7" class="muted center">${ngData.items.length ? "Không có game phù hợp." : `Chưa quét. Bấm "Quét lại" (vài phút) hoặc chờ quy trình hằng ngày.`}</td></tr>`;
 }
@@ -440,6 +579,10 @@ function renderPlayables() {
   const onlyChart = $("#pl-chart").checked, onlyNew = $("#pl-new").checked;
   let items = plData.items.filter((i) => (!source || i.source === source) && (!type || i.type === type)
     && (!onlyChart || i.chart) && (!onlyNew || i.isNew) && (!needle || norm(`${i.name} ${i.category}`).includes(needle)));
+  // Playable của thương hiệu / ứng dụng không phải game: không bao giờ là puzzle
+  const kindOf = new Map(puzzleFilter(items, (i) => i.type && i.type !== "game" ? { title: "" }
+    : { title: i.name, store: i.chart?.store, appId: i.chart?.appId, hint: i.category }).map(({ it, kind }) => [it, kind]));
+  items = items.filter((i) => kindOf.has(i));
   const byName = (a, b) => a.name.localeCompare(b.name);
   const sorters = {
     chart: (a, b) => (a.chart?.rank ?? 1e9) - (b.chart?.rank ?? 1e9) || byName(a, b),
@@ -466,7 +609,7 @@ function renderPlayables() {
       <div class="pl-body">
         <div class="pl-name" title="${esc(p.name)}">${esc(p.name)}</div>
         <div class="pl-foot">
-          ${p.isNew ? `<span class="badge new">MỚI</span>` : ""}
+          ${p.isNew ? `<span class="badge new">MỚI</span>` : ""}${pzTag(kindOf.get(p))}
           ${p.chart ? `<a class="tag up" href="${gameHref(p.chart.store, p.chart.appId)}" title="Hạng tốt nhất trong các bảng đang theo dõi">#${p.chart.rank} · ${p.chart.charts} bảng</a>` : ""}
           <span class="tag">${esc(PL_TYPE[p.type] ?? p.type)}</span>
           ${p.category ? `<span class="tag">${esc(p.category)}</span>` : ""}
@@ -513,14 +656,23 @@ async function loadDigest(date) {
       <div style="margin-top:10px"><button class="btn" data-action="rebuild-digest">Tạo ngay từ dữ liệu hiện có</button></div></div>`;
     return;
   }
-  const countrySections = d.countries.map((c) => {
-    const msg = c.compared ? "Không có." : "Chưa đủ dữ liệu để so sánh.";
+  // Gọi puzzleFilter một lần cho toàn bộ trang để thanh lọc đếm đúng; rồi tách lại theo quốc gia
+  const tagged = rankLists({
+    multi: d.countries.flatMap((c, ci) => c.multi.map((x) => ({ ...x, _c: ci }))),
+    climbers: d.countries.flatMap((c, ci) => c.climbers.map((x) => ({ ...x, _c: ci }))),
+    newcomers: d.countries.flatMap((c, ci) => c.newcomers.map((x) => ({ ...x, _c: ci }))),
+  }, d.newApps.map((a) => ["newApps", { ...a, developer: a.publisher }]));
+  const newApps = tagged.extra.map((t) => t.it);
+  const countrySections = d.countries.map((c, ci) => {
+    const msg = c.compared ? (genre ? "Không có game thuộc kiểu puzzle đang chọn." : "Không có.") : "Chưa đủ dữ liệu để so sánh.";
+    const pick = (list) => tagged[list].filter((t) => t.it._c === ci);
+    const li = (list, withMulti) => { const r = pick(list); return r.length ? r.map(({ it, kind }) => listItem(it, withMulti ? multiTags(it) : "", kind)).join("") : emptyLi(msg); };
     return `<section class="panel">
       <h2>${esc(c.name)}</h2>
       <div class="grid3 inner">
-        <div><h3>Nổi bật trên nhiều bảng</h3><ul class="list">${c.multi.length ? c.multi.map((m) => listItem(m, multiTags(m))).join("") : emptyLi(msg)}</ul></div>
-        <div><h3>Tăng hạng mạnh</h3><ul class="list">${c.climbers.length ? c.climbers.map((x) => listItem(x)).join("") : emptyLi(msg)}</ul></div>
-        <div><h3>Mới vào top 50</h3><ul class="list">${c.newcomers.length ? c.newcomers.map((x) => listItem(x)).join("") : emptyLi(msg)}</ul></div>
+        <div><h3>Nổi bật trên nhiều bảng</h3><ul class="list">${li("multi", true)}</ul></div>
+        <div><h3>Tăng hạng mạnh</h3><ul class="list">${li("climbers")}</ul></div>
+        <div><h3>Mới vào top 50</h3><ul class="list">${li("newcomers")}</ul></div>
       </div>
     </section>`;
   }).join("");
@@ -540,7 +692,7 @@ async function loadDigest(date) {
     <section class="panel">
       <h2>Game mới từ nhà phát hành đang theo dõi</h2>
       <p class="hint">Phát hiện trong 3 ngày gần nhất.</p>
-      ${newAppsList(d.newApps, "Không có game mới.")}
+      ${newAppsList(newApps, genre ? "Không có game mới thuộc kiểu puzzle đang chọn." : "Không có game mới.")}
     </section>
     <section class="panel">
       <h2>Tin đáng đọc</h2>
@@ -610,6 +762,7 @@ async function loadPublisher(store, devId) {
   }
   const p = d.publisher;
   const inChart = d.apps.filter((a) => a.bestRank).length;
+  const apps = puzzleFilter(d.apps, (a) => ({ title: a.title, store: p.store, appId: a.appId }));
   el.innerHTML = `
     <a class="back" href="#/publishers">← Nhà phát hành</a>
     <div class="page-head">
@@ -624,17 +777,17 @@ async function loadPublisher(store, devId) {
     </div>
     <div class="panel flush"><div class="table-wrap"><table>
       <thead><tr><th>Game</th><th class="num">Hạng tốt nhất</th><th class="hide-sm">Phát hành</th><th class="hide-sm">Lượt cài / đánh giá</th><th class="hide-sm">Thấy lần đầu</th></tr></thead>
-      <tbody>${d.apps.map((a) => {
+      <tbody>${apps.length ? apps.map(({ it: a, kind }) => {
         const href = a.bestRank || a.charts ? gameHref(p.store, a.appId) : safeUrl(a.url);
         const ext = a.bestRank ? "" : ` target="_blank" rel="noopener"`;
         return `<tr>
-          <td><a class="game" href="${href}"${ext}>${iconImg(a)}<div class="meta"><div class="title">${esc(a.title)}${a.isNew ? ` <span class="badge new">MỚI</span>` : ""}</div></div></a></td>
+          <td><a class="game" href="${href}"${ext}>${iconImg(a)}<div class="meta"><div class="title">${esc(a.title)}${a.isNew ? ` <span class="badge new">MỚI</span>` : ""}</div>${kind ? `<div class="tags">${pzTag(kind)}</div>` : ""}</div></a></td>
           <td class="num">${a.bestRank ? `#${a.bestRank} <span class="muted">(${a.charts} bảng)</span>` : `<span class="muted">–</span>`}</td>
           <td class="hide-sm muted">${a.released ? esc(String(a.released).length > 12 ? fmtDate(a.released) : a.released) : "–"}</td>
           <td class="hide-sm muted">${[a.installs, a.ratings != null ? `${Number(a.ratings).toLocaleString("vi-VN")} đánh giá` : null].filter(Boolean).map(esc).join(" · ") || "–"}</td>
           <td class="hide-sm muted">${fmtDate(a.firstSeen)}</td>
         </tr>`;
-      }).join("")}</tbody></table></div></div>`;
+      }).join("") : `<tr><td colspan="5" class="muted center">Không có game thuộc kiểu puzzle đang chọn.</td></tr>`}</tbody></table></div></div>`;
 }
 
 // ================= Trang chi tiết game =================
@@ -902,7 +1055,7 @@ async function runGlobalSearch() {
 
 // ================= trạng thái cập nhật =================
 let wasRunning = false;
-const STEP_LABEL = { charts: "bảng xếp hạng", publishers: "nhà phát hành", news: "tin ngành", ads: "quảng cáo", playables: "thư viện playable", newgames: "game mới", digest: "tóm tắt", publish: "bản công khai" };
+const STEP_LABEL = { charts: "bảng xếp hạng", publishers: "nhà phát hành", news: "tin ngành", ads: "quảng cáo", playables: "thư viện playable", newgames: "game mới", digest: "tóm tắt", publish: "bản công khai", china: "thị trường Trung Quốc" };
 
 async function pollStatus() {
   let s;
@@ -923,13 +1076,20 @@ async function pollStatus() {
     const err = s.lastRun?.failed ? ` · ${s.lastRun.failed} bảng lỗi` : "";
     $("#status-text").textContent = last ? `Cập nhật: ${last}${err}` : "Chưa có dữ liệu";
   }
-  if (wasRunning && !s.running) route();
+  if (wasRunning && !s.running) { ovCache = null; route(); }
   wasRunning = s.running;
   setTimeout(pollStatus, s.running ? 2000 : 30000);
 }
 
 // ================= điều hướng =================
-const TAB_VIEWS = ["overview", "digest", "chart", "publishers", "news", "newgames", "ads", "playables"];
+const TAB_VIEWS = ["overview", "digest", "chart", "publishers", "news", "newgames", "ads", "playables", "china"];
+
+// Tab "Trung Quốc": public/china.js (nạp khi mở tab lần đầu); tab phụ theo đường dẫn #/china/<tab>
+async function loadChina(sub) {
+  setNotice(null);
+  const { showChina } = await import("./china.js");
+  return showChina(sub);
+}
 
 function show(v) {
   view = v;
@@ -955,11 +1115,17 @@ function route() {
   if (v === "publishers") return loadPublishers();
   if (v === "ads") return loadAds();
   if (v === "playables") return loadPlayables();
-  if (v === "newgames") return loadNewGames();
+  if (v === "newgames") { ngTab = a === "puzzle" ? "puzzle" : "all"; return loadNewGames(); }
+  if (v === "china") return loadChina(a);
 }
 
 async function init() {
   meta = await api("/api/meta");
+  setPuzzleIds(meta.puzzleIds);
+  $("#genre-bar").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-genre]");
+    if (b) setGenre(b.dataset.genre === genre ? "" : b.dataset.genre);
+  });
   fillSelect($("#country"), meta.countries, "code", prefs.country);
   fillSelect($("#store"), meta.stores, "key", prefs.store);
   fillSelect($("#collection"), meta.collections, "key", prefs.collection);
@@ -988,8 +1154,26 @@ async function init() {
   for (const id of ["ads-sort", "ads-source", "ads-game", "ads-format", "ads-min-days", "ads-new", "ads-active"]) $("#" + id).addEventListener("change", loadAds);
   let adsQTimer;
   $("#ads-q").addEventListener("input", () => { clearTimeout(adsQTimer); adsQTimer = setTimeout(loadAds, 250); });
-  for (const id of ["ng-store", "ng-days", "ng-sort", "ng-noclone", "ng-nochart"]) $("#" + id).addEventListener("change", renderNewGames);
+  // Khôi phục bộ lọc Game mới đã lưu (thể loại và từ khoá điền sau khi có dữ liệu, xem fillNgOptions)
+  for (const id of NG_SELECTS) if (prefs.ng?.[id] && [...$("#" + id).options].some((o) => o.value === prefs.ng[id])) $("#" + id).value = prefs.ng[id];
+  for (const id of NG_CHECKS) $("#" + id).checked = !!prefs.ng?.[id];
+  ngKind = prefs.ngKind ?? "";
+  for (const id of [...NG_SELECTS, ...NG_CHECKS]) $("#" + id).addEventListener("change", () => { saveNgPrefs(); renderNewGames(); });
   $("#ng-q").addEventListener("input", renderNewGames);
+  $("#ng-puzzle").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ng-kind]");
+    if (!b) return;
+    ngKind = ngKind === b.dataset.ngKind ? "" : b.dataset.ngKind;
+    saveNgPrefs();
+    renderNewGames();
+  });
+  $("#ng-reset").addEventListener("click", () => {
+    for (const id of NG_SELECTS) $("#" + id).selectedIndex = id === "ng-days" ? 2 : 0;
+    for (const id of NG_CHECKS) $("#" + id).checked = false;
+    $("#ng-q").value = ""; ngTrend = null; ngKind = "";
+    saveNgPrefs();
+    renderNewGames();
+  });
   $("#ng-trends").addEventListener("click", (e) => {
     const b = e.target.closest("[data-trend]");
     if (!b) return;

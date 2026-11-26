@@ -11,3 +11,5 @@ console.log(`[${stamp()}] Bắt đầu quy trình hằng ngày`);
 await runDaily((msg) => console.log(`[${stamp()}] ${msg}`));
 clearInterval(timer);
 console.log(`[${stamp()}] Xong${dailyStatus.error ? ` (có lỗi: ${dailyStatus.error})` : ""}`);
+// Request bị bỏ dở do timeout có thể giữ socket mở, làm tiến trình không tự thoát
+process.exit(0);

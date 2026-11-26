@@ -7,7 +7,9 @@
     "fetch": "node fetch.mjs",
     "daily": "node daily.mjs",
     "export": "node publish.mjs --no-push",
-    "publish": "node publish.mjs"
+    "publish": "node publish.mjs",
+    "china": "node china-daily.mjs",
+    "china-export": "node china-export.mjs"
   },
   "keywords": [],
   "author": "",

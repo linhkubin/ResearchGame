@@ -8,7 +8,8 @@ const load = (file) => {
   return cache.get(file);
 };
 // Phải khớp với fileKey trong lib/export.mjs
-const fileKey = (s) => encodeURIComponent(String(s)).replace(/[%*']/g, "_");
+const fileKey = (s) => encodeURIComponent(String(s)).replace(/[%*']/g, "_")
+  .replace(/^(con|prn|aux|nul|com\d|lpt\d)(?=\.|$)/i, "_$1");
 const norm = (s) => String(s ?? "").normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 const today = () => new Date().toLocaleDateString("sv-SE");
 const READ_ONLY = { error: "Bản công khai chỉ để xem. Cập nhật dữ liệu trên máy chạy Chart Tracker." };

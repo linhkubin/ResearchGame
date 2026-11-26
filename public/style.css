@@ -130,6 +130,7 @@ body:not([data-view="overview"]):not([data-view="chart"]):not([data-view="news"]
 }
 
 main { padding: 16px 20px 40px; }
+#view-china .notice { margin: 0 0 12px; }
 .panel {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 16px;
@@ -322,7 +323,7 @@ h3 { font-size: 13px; margin: 6px 0 4px; color: var(--muted); }
 .ad-rank, .ad-score { position: absolute; top: 8px; color: #fff; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
 .ad-rank { left: 8px; background: rgba(0,0,0,.7); }
 .ad-score { right: 8px; background: var(--accent); cursor: help; }
-.ad-src { position: absolute; top: 8px; left: 44px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; color: #fff; }
+.ad-src { position: absolute; top: 8px; left: 44px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; color: var(--accent-text); }
 .ad-src.meta { background: #1877f2; }
 .ad-src.apple { background: #1d1d1f; }
 .ad-src.google { background: #188038; }
@@ -381,3 +382,179 @@ body.pl-open { overflow: hidden; }
 #ng-body td { vertical-align: middle; }
 #ng-body td.num, #ng-body td:nth-child(2) { white-space: nowrap; }
 #ng-body .game .tags { margin-top: 3px; }
+
+/* Thanh lọc puzzle: hiện ở các tab có danh sách game */
+.genre-bar { display: none; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 20px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+body[data-view="overview"] .genre-bar, body[data-view="digest"] .genre-bar, body[data-view="chart"] .genre-bar,
+body[data-view="ads"] .genre-bar, body[data-view="playables"] .genre-bar,
+body[data-view="publisher"] .genre-bar { display: flex; }
+.genre-bar .gb-label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+.genre-chip { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.genre-chip:hover { border-color: var(--accent); }
+.genre-chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.genre-chip .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.genre-chip.on .n { opacity: .85; }
+.genre-chip.zero { opacity: .45; }
+.genre-bar .gb-hint { font-size: 12px; color: var(--muted); margin-left: auto; }
+.tag.pz { background: var(--new-bg); color: var(--new); }
+@media (max-width: 720px) { .genre-bar { padding-left: 16px; padding-right: 16px; } .genre-bar .gb-hint { display: none; } }
+
+/* Game mới: tab phụ và thẻ kiểu puzzle */
+.subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.subtab { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); text-decoration: none; font-weight: 600; font-size: 13.5px; }
+.subtab .n { font-weight: 400; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.subtab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.pz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.pz-card { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; text-align: left; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; cursor: pointer; }
+.pz-card:hover { border-color: var(--accent); }
+.pz-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--surface); }
+.pz-card.zero { opacity: .5; }
+.pz-name { font-weight: 600; font-size: 13px; }
+.pz-n { font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
+.pz-sub, .pz-top { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pz-sub .up { color: var(--up); font-weight: 600; }
+
+/* ================= Tab "Trung Quốc" (public/china.js) ================= */
+#view-china { --fresh: #a15c00; --fresh-bg: #fdf0d8; }
+@media (prefers-color-scheme: dark) { #view-china { --fresh: #f0b860; --fresh-bg: #3a2c12; } }
+.cn-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cn-head .hint { margin: 0; }
+.cn-status-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+#view-china .subtabs { flex-wrap: wrap; }
+.cn-controls {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; margin-bottom: 14px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+}
+.cn-controls label { display: none; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.cn-controls select, .cn-controls input[type="search"] {
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 8px; min-width: 130px;
+}
+.cn-controls .grow { flex: 1 1 220px; }
+.cn-controls .grow input { width: 100%; }
+.cn-controls .check span { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; padding-bottom: 7px; }
+#view-china[data-cn-view="overview"] .cn-for-overview, #view-china[data-cn-view="chart"] .cn-for-chart,
+#view-china[data-cn-view="tags"] .cn-for-tags, #view-china[data-cn-view="news"] .cn-for-news,
+#view-china[data-cn-view="search"] .cn-for-search, #view-china[data-cn-view="aggregate"] .cn-for-aggregate,
+#view-china[data-cn-view="newgames"] .cn-for-newgames, #view-china[data-cn-view="puzzle"] .cn-for-puzzle,
+#view-china[data-cn-view="bilibili"] .cn-for-bilibili { display: flex; }
+
+.cn-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start; }
+.cn-grid .panel { margin: 0; }
+.cn-empty { color: var(--muted); padding: 24px; text-align: center; }
+.cn-table { width: 100%; border-collapse: collapse; }
+.cn-table th, .cn-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.cn-table th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--surface-2); white-space: nowrap; }
+.cn-table th.num, .cn-table td.num { text-align: right; }
+.cn-table tbody tr { cursor: pointer; }
+.cn-table tbody tr:hover { background: var(--surface-2); }
+.cn-table tr:last-child td { border-bottom: 0; }
+.cn-rank { font-weight: 700; width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.cn-small { font-size: 12.5px; color: var(--muted); }
+.cn-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.cn-game { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.cn-icon { flex: none; width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--surface-2); border: 1px solid var(--border); }
+.cn-icon.sm { width: 30px; height: 30px; border-radius: 7px; }
+.cn-game-text { min-width: 0; }
+.cn-game-title { font-weight: 600; }
+.cn-game-vi { color: var(--muted); font-size: 12.5px; }
+.cn-game-line { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+.cn-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; white-space: nowrap; }
+.cn-badge.up { background: var(--up-bg); color: var(--up); }
+.cn-badge.down { background: var(--down-bg); color: var(--down); }
+.cn-badge.new { background: var(--new-bg); color: var(--new); }
+.cn-badge.fresh { background: var(--fresh-bg); color: var(--fresh); }
+.cn-badge.flat { background: var(--surface-2); color: var(--muted); }
+.cn-tag, .cn-gtag {
+  display: inline-block; font-size: 11.5px; padding: 1px 7px; margin: 1px 3px 1px 0; border-radius: 999px;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border); white-space: nowrap;
+}
+.cn-gtag.puzzle { background: var(--new-bg); color: var(--new); border-color: transparent; font-weight: 600; }
+.cn-why { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+
+.cn-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cn-chip { display: inline-flex; flex-direction: column; font-size: 11.5px; line-height: 1.25; padding: 3px 7px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; white-space: nowrap; }
+.cn-chip:hover { border-color: var(--accent); }
+.cn-chip b { font-size: 12px; }
+.cn-chip small { color: var(--muted); }
+.cn-chip.mini { border-style: dashed; }
+
+.cn-list { display: grid; gap: 2px; }
+.cn-item { display: flex; gap: 10px; align-items: center; padding: 6px; border-radius: 8px; cursor: pointer; }
+.cn-item:hover { background: var(--surface-2); }
+.cn-right { margin-left: auto; text-align: right; flex: none; }
+.cn-board-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.cn-board-head a { font-size: 12.5px; white-space: nowrap; }
+.cn-subhead { margin: 10px 0 4px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+
+.cn-tagrow { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 6px 16px; padding: 10px 0; border-bottom: 1px solid var(--border); align-items: center; }
+.cn-tagrow:last-child { border-bottom: 0; }
+.cn-bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+.cn-bar i { display: block; height: 100%; background: var(--accent); }
+.cn-minis { display: flex; flex-wrap: wrap; gap: 6px; }
+.cn-mini { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); background: var(--surface-2);
+  border-radius: 999px; padding: 3px 10px 3px 4px; font-size: 12.5px; cursor: pointer; max-width: 240px; }
+.cn-mini:hover { border-color: var(--accent); }
+.cn-mini img { width: 20px; height: 20px; border-radius: 5px; }
+.cn-mini span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cn-news-list { display: grid; gap: 12px; }
+.cn-news { margin: 0; }
+.cn-news h3 { margin: 4px 0; font-size: 15px; line-height: 1.35; }
+.cn-news h3 a { color: var(--text); text-decoration: none; }
+.cn-news h3 a:hover { color: var(--accent); text-decoration: underline; }
+.cn-news p { margin: 0; color: var(--muted); font-size: 13px; }
+
+#cn-detail {
+  width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 40px); padding: 0; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--surface); color: var(--text);
+}
+#cn-detail::backdrop { background: rgba(0, 0, 0, .5); }
+.cn-d-head { display: flex; gap: 14px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+.cn-d-head .cn-icon { width: 64px; height: 64px; border-radius: 14px; }
+.cn-d-head h2 { font-size: 18px; margin: 0; }
+.cn-d-close { margin-left: auto; align-self: flex-start; }
+.cn-d-body { padding: 14px 18px 20px; display: grid; gap: 16px; }
+.cn-d-body h3 { margin: 0; font-size: 14px; }
+.cn-d-body p { margin: 0; white-space: pre-line; }
+.cn-d-body details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.cn-kv { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.cn-kv div { font-size: 12px; color: var(--muted); }
+.cn-kv b { display: block; font-size: 15px; color: var(--text); }
+.cn-hist { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.cn-hist-card { border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+.cn-hist-card svg { display: block; width: 100%; height: 40px; margin-top: 4px; }
+.cn-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.cn-links a { text-decoration: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; color: var(--text); background: var(--surface-2); }
+.cn-links a:hover { border-color: var(--accent); }
+.cn-links small { display: block; color: var(--muted); }
+
+.cn-pcards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin-bottom: 14px; }
+.cn-pcard { text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; display: grid; gap: 4px; box-shadow: var(--shadow); }
+.cn-pcard:hover { border-color: var(--accent); }
+.cn-pcard.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.cn-pcard-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.cn-pcard-head span { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cn-pcard-lead { display: flex; gap: 6px; align-items: center; font-size: 12.5px; min-width: 0; }
+.cn-pcard-lead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Tab phụ video (Bilibili) */
+.cn-vgrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.cn-video { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  background: var(--surface); color: var(--text); text-decoration: none; box-shadow: var(--shadow); }
+.cn-video:hover { border-color: var(--accent); }
+.cn-vthumb { position: relative; aspect-ratio: 16 / 10; background: var(--surface-2); }
+.cn-vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cn-vrank, .cn-vdur { position: absolute; font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: rgba(0, 0, 0, .65); color: #fff; }
+.cn-vrank { top: 6px; left: 6px; }
+.cn-vdur { bottom: 6px; right: 6px; font-weight: 600; }
+.cn-vbody { padding: 8px 10px 10px; display: grid; gap: 4px; }
+.cn-vtitle { font-weight: 600; font-size: 13.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cn-vzh { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cn-vstats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cn-vstats b { color: var(--text); }
+.cn-vmeta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -35,6 +35,7 @@
     <a class="tab" href="#/newgames" data-tab="newgames">Game mới</a>
     <a class="tab" href="#/ads" data-tab="ads">Quảng cáo</a>
     <a class="tab" href="#/playables" data-tab="playables">Playable</a>
+    <a class="tab" href="#/china" data-tab="china">Trung Quốc</a>
   </nav>
 
   <section class="controls" id="controls">
@@ -105,12 +106,42 @@
       <option value="momentum">Đà tăng</option>
       <option value="gain">Tăng 7 ngày qua</option>
       <option value="size">Lượt cài / đánh giá</option>
+      <option value="score">Điểm đánh giá</option>
       <option value="released">Mới phát hành</option>
       <option value="found">Mới phát hiện</option>
     </select></label></span>
+    <span class="for-newgames"><label>Thể loại <select id="ng-genre"><option value="">Tất cả thể loại</option></select></label></span>
+    <span class="for-newgames"><label>Quy mô từ <select id="ng-size">
+      <option value="">Tất cả</option>
+      <option value="1">1K cài / 10 đánh giá</option>
+      <option value="2">10K cài / 100 đánh giá</option>
+      <option value="3">100K cài / 1.000 đánh giá</option>
+      <option value="4">1M cài / 10.000 đánh giá</option>
+    </select></label></span>
+    <span class="for-newgames"><label>Đà tăng từ <select id="ng-momentum">
+      <option value="">Tất cả</option>
+      <option value="50">50 (nửa trên)</option>
+      <option value="75">75 (top 25%)</option>
+      <option value="90">90 (top 10%)</option>
+    </select></label></span>
+    <span class="for-newgames"><label>Điểm từ <select id="ng-score">
+      <option value="">Tất cả</option>
+      <option value="4">4.0★</option>
+      <option value="4.5">4.5★</option>
+    </select></label></span>
+    <span class="for-newgames"><label>Mới phát hiện <select id="ng-found">
+      <option value="">Bất kỳ lúc nào</option>
+      <option value="1">Hôm nay</option>
+      <option value="3">3 ngày qua</option>
+      <option value="7">7 ngày qua</option>
+    </select></label></span>
+    <span class="for-newgames"><label>Tìm thấy qua <select id="ng-term"><option value="">Tất cả từ khoá</option></select></label></span>
+    <span class="for-newgames check"><label><input type="checkbox" id="ng-rising"> Chỉ game đang tăng</label></span>
+    <span class="for-newgames check"><label><input type="checkbox" id="ng-followed"> Chỉ NPH đang theo dõi</label></span>
     <span class="for-newgames check"><label><input type="checkbox" id="ng-noclone"> Ẩn game trùng tên (clone)</label></span>
     <span class="for-newgames check"><label><input type="checkbox" id="ng-nochart"> Ẩn game đã vào chart</label></span>
     <span class="for-newgames grow"><input id="ng-q" type="search" placeholder="Tìm tên game / nhà phát hành / thể loại…"></span>
+    <span class="for-newgames"><button id="ng-reset" class="btn">Xoá bộ lọc</button></span>
     <span class="for-newgames"><button id="ng-refresh" class="btn">Quét lại</button></span>
 
     <span class="for-playables"><label>Sắp xếp <select id="pl-sort">
@@ -131,6 +162,9 @@
     <span class="for-playables grow"><input id="pl-q" type="search" placeholder="Tìm tên game / thể loại…"></span>
     <span class="for-playables"><button id="pl-refresh" class="btn">Lấy lại</button></span>
   </section>
+
+  <!-- Thanh lọc game puzzle dùng chung cho các tab danh sách game (public/puzzle.js) -->
+  <div id="genre-bar" class="genre-bar" aria-label="Lọc theo kiểu game puzzle"></div>
 
   <div id="notice" class="notice" hidden></div>
 
@@ -183,6 +217,8 @@
       <div id="ads-list" class="ad-grid"></div>
     </section>
     <section id="view-newgames" class="view" hidden>
+      <nav class="subtabs" id="ng-tabs" aria-label="Tab phụ của Game mới"></nav>
+      <div id="ng-puzzle" class="panel" hidden></div>
       <p class="hint" id="ng-meta"></p>
       <div id="ng-trends" class="panel" hidden></div>
       <div class="panel flush"><div class="table-wrap"><table>
@@ -194,6 +230,65 @@
     <section id="view-playables" class="view" hidden>
       <p class="hint" id="pl-meta"></p>
       <div id="pl-list" class="pl-grid"></div>
+    </section>
+    <!-- Tab "Trung Quốc": public/china.js vẽ vào đây; tab phụ theo đường dẫn #/china/<tab> -->
+    <section id="view-china" class="view" hidden>
+      <div class="cn-head">
+        <p class="hint">Mini game WeChat / Douyin · TapTap · App Store Trung Quốc · Tencent 应用宝 · Xiaomi. Tên, thể loại và tin đã dịch sang tiếng Việt.</p>
+        <div class="cn-status-row"><span id="cn-status" class="muted"></span>
+          <button class="btn" id="cn-refresh">Cập nhật Trung Quốc</button></div>
+      </div>
+      <nav class="subtabs" id="cn-tabs" aria-label="Tab phụ của Trung Quốc">
+        <a class="subtab" href="#/china/aggregate" data-cn-tab="aggregate">Bảng tổng hợp</a>
+        <a class="subtab" href="#/china/newgames" data-cn-tab="newgames">Game mới</a>
+        <a class="subtab" href="#/china/puzzle" data-cn-tab="puzzle">Puzzle</a>
+        <a class="subtab" href="#/china/bilibili" data-cn-tab="bilibili">Bilibili</a>
+        <a class="subtab" href="#/china/overview" data-cn-tab="overview">Tổng quan</a>
+        <a class="subtab" href="#/china/chart" data-cn-tab="chart">Bảng xếp hạng</a>
+        <a class="subtab" href="#/china/tags" data-cn-tab="tags">Thể loại</a>
+        <a class="subtab" href="#/china/news" data-cn-tab="news">Tin ngành</a>
+        <a class="subtab" href="#/china/search" data-cn-tab="search">Tìm game</a>
+      </nav>
+      <div class="cn-controls">
+        <label class="cn-for-overview cn-for-chart cn-for-tags">Nguồn <select id="cn-source"></select></label>
+        <label class="cn-for-chart">Bảng <select id="cn-board"></select></label>
+        <label class="cn-for-aggregate cn-for-newgames cn-for-puzzle">Kênh <select id="cn-kind"><option value="">Tất cả</option><option value="app">App (store)</option><option value="mini">Mini game</option></select></label>
+        <label class="cn-for-newgames">Loại <select id="cn-newtype">
+          <option value="">Tất cả game mới</option>
+          <option value="released">Mới phát hành</option>
+          <option value="newBoard">Trên bảng game mới</option>
+          <option value="upcoming">Sắp ra mắt (đặt trước)</option>
+          <option value="discovered">Lần đầu lên bảng</option>
+        </select></label>
+        <label class="cn-for-newgames">Trong <select id="cn-newdays">
+          <option value="7">7 ngày</option><option value="14">14 ngày</option><option value="30" selected>30 ngày</option><option value="60">60 ngày</option>
+        </select></label>
+        <label class="cn-for-aggregate cn-for-chart cn-for-newgames">Thể loại <select id="cn-genre"></select></label>
+        <label class="cn-for-newgames">Sắp xếp <select id="cn-ng-sort">
+          <option value="">Mới phát hành trước</option><option value="rank">Hạng tốt nhất</option><option value="follow">Theo dõi + đặt trước (TapTap)</option>
+        </select></label>
+        <label class="cn-for-puzzle">Sắp xếp <select id="cn-pz-sort">
+          <option value="">Điểm tổng hợp</option><option value="newest">Mới phát hành trước</option>
+        </select></label>
+        <label class="cn-for-chart cn-for-aggregate">Ngày <select id="cn-date"></select></label>
+        <label class="cn-for-bilibili">Đăng trong <select id="cn-vdays">
+          <option value="3">3 ngày</option><option value="7">7 ngày</option><option value="14">14 ngày</option><option value="30" selected>30 ngày</option>
+        </select></label>
+        <label class="cn-for-bilibili">Sắp xếp <select id="cn-vsort">
+          <option value="likes">Lượt thích nhiều nhất</option><option value="likesGain">Thích tăng nhanh nhất</option>
+          <option value="play">Lượt xem</option><option value="favs">Lượt lưu</option><option value="comments">Bình luận</option>
+          <option value="newest">Mới đăng</option>
+        </select></label>
+        <label class="cn-for-bilibili">Tìm thấy qua <select id="cn-vfound"></select></label>
+        <label class="cn-for-news">Nguồn tin <select id="cn-news-source"></select></label>
+        <label class="grow cn-for-chart cn-for-aggregate cn-for-newgames cn-for-puzzle cn-for-bilibili cn-for-news cn-for-search">Lọc
+          <input id="cn-q" type="search" placeholder="Tên game (Trung hoặc Việt), nhà phát triển, thể loại…">
+        </label>
+        <label class="check cn-for-chart cn-for-aggregate cn-for-puzzle"><span><input id="cn-only-new" type="checkbox"> Chỉ game mới</span></label>
+        <label class="check cn-for-bilibili"><span><input id="cn-vpuzzle" type="checkbox"> Chỉ game puzzle</span></label>
+      </div>
+      <div id="cn-main"></div>
+      <dialog id="cn-detail"></dialog>
     </section>
     <section id="view-game" class="view" hidden></section>
     <section id="view-publisher" class="view" hidden></section>

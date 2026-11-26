@@ -6,7 +6,7 @@ import {
 } from "./lib/config.mjs";
 import { lastRun, latestDate, today } from "./lib/db.mjs";
 import { progress } from "./lib/fetcher.mjs";
-import { chart, history, overview, appPresence, search, gameDetail } from "./lib/queries.mjs";
+import { chart, history, overview, appPresence, search, gameDetail, puzzleIds } from "./lib/queries.mjs";
 import { getIcon, isAllowed } from "./lib/icons.mjs";
 import { listNews, runNewsFetch, newsStatus } from "./lib/news.mjs";
 import {
@@ -18,13 +18,16 @@ import { runDaily, dailyStatus } from "./lib/daily.mjs";
 import { listAds, runAdsFetch, adsStatus, scanOne, unfollowGame, gameKeyForApp } from "./lib/ads.mjs";
 import { listPlayables, runPlayablesFetch, playablesStatus } from "./lib/playables.mjs";
 import { listNewGames, runNewGamesFetch, newGamesStatus } from "./lib/newgames.mjs";
+import { chinaRoutes } from "./lib/china/routes.mjs";
 
 const PUBLIC = join(import.meta.dirname, "public");
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json",
+  ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg" };
 
 const send = (res, code, body, type = "application/json") => {
   res.writeHead(code, { "Content-Type": `${type}; charset=utf-8`, "Cache-Control": "no-store" });
-  res.end(type === "application/json" ? JSON.stringify(body) : body);
+  // File đọc từ đĩa (Buffer) gửi nguyên văn; object thì chuyển sang JSON
+  res.end(type === "application/json" && !Buffer.isBuffer(body) ? JSON.stringify(body) : body);
 };
 
 async function readJson(req) {
@@ -45,10 +48,12 @@ const startDaily = () => runDaily((m) => console.log("[daily]", m)).catch((e) =>
 const startNewsFetch = () => runNewsFetch().catch((e) => console.error("[news] lỗi:", e));
 
 const routes = {
+  // Tab "Trung Quốc": /api/china/…
+  ...chinaRoutes,
   "GET /api/meta": () => ({
     stores: STORES, countries: COUNTRIES, categories: CATEGORIES, collections: COLLECTIONS,
     latest: latestDate(), lastRun: lastRun(), dailyTime: DAILY_TIME, digestCountries: DIGEST_COUNTRIES,
-    adLinks: AD_LINKS,
+    adLinks: AD_LINKS, puzzleIds: puzzleIds(),
   }),
   "GET /api/status": () => ({
     ...progress, running: dailyStatus.running || progress.running,
