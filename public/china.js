@@ -58,7 +58,7 @@ const state = {
   // genre: thể loại chuẩn hoá (lib/china/genres.mjs); newType/newDays/ngSort: tab Game mới; puzzleKind/pzSort: tab Puzzle
   genre: "", newType: "", newDays: 30, ngSort: "", puzzleKind: "", pzSort: "",
   // Tab phụ video (Bilibili): số ngày, cách sắp, tìm thấy qua (từ khoá / game), chỉ puzzle
-  vDays: 30, vSort: "likes", vFound: "", vPuzzle: false,
+  vDays: 30, vSort: "likes", vFound: "", vPuzzle: false, vGenre: "", vCat: "",
 };
 let META = null;
 let renderSeq = 0;
@@ -296,10 +296,18 @@ async function renderVideos(main, seq) {
   const found = [...d.foundBy].sort((a, b) => a.startsWith("game:") - b.startsWith("game:") || a.localeCompare(b));
   sel.innerHTML = `<option value="">Tất cả từ khoá và game</option>` + found.map((f) => `<option value="${esc(f)}">${esc(f.replace(/^game: /, "Game: "))}</option>`).join("");
   sel.value = found.includes(state.vFound) ? state.vFound : "";
+  const CAT_VI = { 手机游戏: "Game mobile", 单机游戏: "Game đơn (PC/console)", 网络游戏: "Game online", 电子竞技: "Thể thao điện tử",
+    桌游棋牌: "Cờ bài / board game", 音游: "Game âm nhạc", GMV: "GMV (video cắt ghép)", Mugen: "Mugen" };
+  $("#cn-vgenre").innerHTML = `<option value="">Tất cả thể loại</option>` + (d.genres ?? []).map((g) => `<option value="${esc(g.key)}">${esc(g.name)} (${g.n})</option>`).join("");
+  $("#cn-vgenre").value = (d.genres ?? []).some((g) => g.key === state.vGenre) ? state.vGenre : "";
+  $("#cn-vcat").innerHTML = `<option value="">Tất cả khu</option>` + (d.categories ?? []).map((c) => `<option value="${esc(c.key)}">${esc(CAT_VI[c.key] ?? c.key)} (${c.n})</option>`).join("");
+  $("#cn-vcat").value = (d.categories ?? []).some((c) => c.key === state.vCat) ? state.vCat : "";
+  const vGenreName = Object.fromEntries((d.genres ?? []).map((g) => [g.key, g.name]));
   if (!d.items.length) return void (main.innerHTML = `<div class="cn-empty">Chưa có video ${esc(PLATFORM[platform])}.${STATIC ? "" : ` Bấm "Cập nhật Trung Quốc" để lấy (khoảng 3 phút).`}</div>`);
   const since = dayBefore(state.vDays - 1, new Date().toLocaleDateString("sv-SE"));
   const needle = state.q.trim().toLowerCase();
   const rows = d.items.filter((v) => v.pubdate >= since && (!state.vFound || v.foundBy === state.vFound) && (!state.vPuzzle || v.puzzle)
+    && (!state.vGenre || v.genres?.includes(state.vGenre)) && (!state.vCat || v.category === state.vCat)
     && (!needle || [v.title, v.titleVi, v.author, v.game, v.category, ...v.tags].join(" ").toLowerCase().includes(needle)));
   const sorters = {
     likes: (a, b) => b.likes - a.likes,
@@ -325,7 +333,7 @@ async function renderVideos(main, seq) {
           <div class="cn-vstats"><span>♥ <b>${num(v.likes)}</b>${gain(v.likesGain)}</span><span>▶ ${num(v.play)}${gain(v.playGain)}</span>
             <span>★ ${num(v.favs)}</span><span>💬 ${num(v.comments)}</span></div>
           <div class="cn-vmeta">${esc(v.author ?? "")} · ${dmy(v.pubdate)}${v.category ? ` · ${esc(v.category)}` : ""}</div>
-          <div>${v.puzzle ? `<span class="cn-gtag puzzle">${esc(kindName(v.puzzle))}</span>` : ""}${v.game ? `<span class="cn-gtag" title="Tìm theo tên game mới">${esc(v.game)}</span>` : `<span class="cn-tag">${esc(v.foundBy)}</span>`}</div>
+          <div>${v.puzzle ? `<span class="cn-gtag puzzle">${esc(kindName(v.puzzle))}</span>` : ""}${(v.genres ?? []).filter((k) => k !== "puzzle").slice(0, 2).map((k) => `<span class="cn-gtag">${esc(vGenreName[k] ?? k)}</span>`).join("")}${v.game ? `<span class="cn-gtag" title="Tìm theo tên game mới">${esc(v.game)}</span>` : `<span class="cn-tag">${esc(v.foundBy)}</span>`}</div>
         </div>
       </a>`).join("")}</div>` : `<div class="cn-empty">Không có video nào khớp bộ lọc.</div>`}`;
 }
@@ -507,6 +515,8 @@ function bind() {
   $("#cn-vsort").onchange = (e) => { state.vSort = e.target.value; render(); };
   $("#cn-vfound").onchange = (e) => { state.vFound = e.target.value; render(); };
   $("#cn-vpuzzle").onchange = (e) => { state.vPuzzle = e.target.checked; render(); };
+  $("#cn-vgenre").onchange = (e) => { state.vGenre = e.target.value; render(); };
+  $("#cn-vcat").onchange = (e) => { state.vCat = e.target.value; render(); };
   let qTimer;
   $("#cn-q").oninput = (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; render(); }, 250); };
 
