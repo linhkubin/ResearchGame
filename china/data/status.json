@@ -1,0 +1,1 @@
+{"running":false,"static":true,"lastRun":{"id":8,"started_at":"2026-11-28T04:18:55.544Z","finished_at":"2026-11-28T04:24:37.342Z","ok":34,"failed":1,"errors":"[{\"what\":\"dịch\",\"error\":\"Google Translate HTTP 429\"}]"}}
