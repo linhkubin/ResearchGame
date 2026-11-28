@@ -437,7 +437,9 @@ body[data-view="publisher"] .genre-bar { display: flex; }
 #view-china[data-cn-view="tags"] .cn-for-tags, #view-china[data-cn-view="news"] .cn-for-news,
 #view-china[data-cn-view="search"] .cn-for-search, #view-china[data-cn-view="aggregate"] .cn-for-aggregate,
 #view-china[data-cn-view="newgames"] .cn-for-newgames, #view-china[data-cn-view="puzzle"] .cn-for-puzzle,
-#view-china[data-cn-view="bilibili"] .cn-for-bilibili { display: flex; }
+#view-china[data-cn-view="bilibili"] .cn-for-bilibili, #view-china[data-cn-view="gameplay"] .cn-for-gameplay { display: flex; }
+/* Tab Video gameplay: ô chỉ dùng cho một chế độ (kho video / theo game) */
+#view-china[data-cn-gpmode="feed"] .cn-gp-games, #view-china[data-cn-gpmode="games"] .cn-gp-feed { display: none !important; }
 
 .cn-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start; }
 .cn-grid .panel { margin: 0; }
@@ -558,3 +560,59 @@ body[data-view="publisher"] .genre-bar { display: flex; }
 .cn-vstats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .cn-vstats b { color: var(--text); }
 .cn-vmeta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Tab phụ Video gameplay (public/china.js renderGameplay): mỗi game một thẻ, video xếp ngang */
+/* minmax(0, 1fr) + min-width: 0: dải video cuộn ngang trong thẻ, không đẩy cả trang rộng ra trên điện thoại */
+.cn-gp-list { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.cn-gp-game { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }
+.cn-gp-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; }
+.cn-gp-head > * { min-width: 0; max-width: 100%; }
+.cn-gp-head .cn-chips { flex: 1 1 260px; }
+.cn-gp-name { cursor: pointer; flex: 0 1 260px; }
+.cn-gp-badges { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cn-gp-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; align-items: flex-start; }
+.cn-gp-tile { flex: none; display: flex; flex-direction: column; padding: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
+  background: var(--surface-2); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cn-gp-tile:hover { border-color: var(--accent); }
+.cn-gp-tile.tall { width: 150px; }
+.cn-gp-tile.tall .cn-gp-media { height: 266px; }
+.cn-gp-tile.wide { width: 300px; }
+.cn-gp-tile.wide .cn-gp-media { height: 169px; }
+.cn-gp-tile.bili { width: 240px; }
+.cn-gp-tile.bili .cn-gp-media { height: 150px; }
+.cn-gp-media { position: relative; background: #000; }
+.cn-gp-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cn-gp-src, .cn-gp-dur { position: absolute; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px; color: #fff; background: rgba(0, 0, 0, .65); }
+.cn-gp-src { top: 6px; left: 6px; }
+.cn-gp-src.taptap { background: #14a37f; }
+.cn-gp-src.bili { background: #e8507f; }
+.cn-gp-dur { bottom: 6px; right: 6px; font-weight: 600; }
+.cn-gp-play { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); opacity: .85; }
+.cn-gp-cap { padding: 6px 8px 8px; display: grid; gap: 3px; font-size: 12.5px; }
+.cn-gp-title { font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cn-vkind { display: inline-block; justify-self: start; font-size: 11px; font-weight: 700; padding: 1px 7px; margin-right: 4px; border-radius: 5px;
+  background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+.cn-vkind.trial, .cn-vkind.gameplay { background: var(--up-bg); color: var(--up); border-color: transparent; }
+.cn-vkind.official, .cn-vkind.pv { background: var(--new-bg); color: var(--new); border-color: transparent; }
+.cn-player { width: min(960px, calc(100vw - 24px)); padding: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); }
+.cn-player::backdrop { background: rgba(0, 0, 0, .6); }
+.cn-player-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.cn-player-frame { aspect-ratio: 16 / 9; background: #000; }
+.cn-player-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.cn-player-anim { background: #000; display: grid; place-items: center; }
+.cn-player-anim img { max-height: 70vh; max-width: 100%; display: block; }
+.cn-player > .cn-small { padding: 8px 14px 0; margin: 0; }
+.cn-player-links { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px 14px; }
+
+/* Kho video gameplay puzzle (public/china.js renderPuzzleFeed): lưới video dọc, ảnh động xem trước */
+.cn-pv-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.cn-pv { display: flex; flex-direction: column; padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.cn-pv:hover { border-color: var(--accent); }
+.cn-pv-media { position: relative; aspect-ratio: 9 / 16; background: #000; }
+.cn-pv.bilibili .cn-pv-media { aspect-ratio: 16 / 10; }
+.cn-pv-media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cn-pv.bilibili .cn-pv-media img { object-fit: cover; }
+.cn-pv-cap { padding: 7px 9px 9px; display: grid; gap: 3px; min-width: 0; }
+.cn-pv-game, .cn-pv-vi { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cn-pv-game { font-size: 13.5px; }

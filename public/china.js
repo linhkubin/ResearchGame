@@ -27,6 +27,8 @@ const staticChina = {
   aggregate: async (p) => (await load(`aggregate/${kindFile(p)}.json`)) ?? { date: null, prevDate: null, total: 0, rows: [] },
   newgames: async () => (await load("newgames.json")) ?? { date: null, rows: [] },
   videos: async (p) => (await load(`videos/${p.platform === "douyin" ? "douyin" : "bilibili"}.json`)) ?? { items: [], foundBy: [], total: 0 },
+  gameplay: async () => (await load("videos/gameplay.json")) ?? { games: [], kinds: [], total: 0 },
+  puzzlevideos: async () => (await load("videos/puzzle.json")) ?? { items: [], kinds: [], total: 0 },
   puzzle: async (p) => (await load(`puzzle/${kindFile(p)}.json`)) ?? { date: null, total: 0, rows: [], kinds: [] },
   chart: async (p) => (await load(`chart/${p.source}/${fileKey(p.board)}.json`)) ?? { date: null, prevDate: null, rows: [] },
   overview: async (p) => (await load(`overview/${p.source}.json`)) ?? { date: null, boards: [], fresh: [] },
@@ -50,7 +52,7 @@ const api = (path, params = {}) => (STATIC ? (staticChina[path] ?? (async () => 
   : fetch(`/api/china/${path}?${new URLSearchParams(params)}`).then((r) => r.json()));
 
 // ---------- trạng thái ----------
-const VIEWS = ["aggregate", "newgames", "puzzle", "bilibili", "overview", "chart", "tags", "news", "search"];
+const VIEWS = ["aggregate", "newgames", "puzzle", "gameplay", "bilibili", "overview", "chart", "tags", "news", "search"];
 const state = {
   view: "aggregate", kind: "",
   source: localStorage.getItem("ct-source") || "wechat",
@@ -58,7 +60,11 @@ const state = {
   // genre: thể loại chuẩn hoá (lib/china/genres.mjs); newType/newDays/ngSort: tab Game mới; puzzleKind/pzSort: tab Puzzle
   genre: "", newType: "", newDays: 30, ngSort: "", puzzleKind: "", pzSort: "",
   // Tab phụ video (Bilibili): số ngày, cách sắp, tìm thấy qua (từ khoá / game), chỉ puzzle
-  vDays: 30, vSort: "likes", vFound: "", vPuzzle: false, vGenre: "", vCat: "",
+  vDays: 30, vSort: "likes", vFound: "", vPuzzle: false, vGenre: "", vCat: "", vType: "",
+  // Tab phụ Video gameplay: nhóm game (puzzle / mới / tất cả), kiểu puzzle, nguồn video (taptap / bilibili)
+  gpGroup: "puzzle", gpKind: "", gpSrc: "",
+  // gpMode: "feed" = kho video gameplay puzzle, "games" = theo game trên bảng xếp hạng; gpList: "" | "new" | "hits"; gpSort
+  gpMode: "feed", gpList: "", gpSort: "newest",
 };
 let META = null;
 let renderSeq = 0;
@@ -307,6 +313,7 @@ async function renderVideos(main, seq) {
   const since = dayBefore(state.vDays - 1, new Date().toLocaleDateString("sv-SE"));
   const needle = state.q.trim().toLowerCase();
   const rows = d.items.filter((v) => v.pubdate >= since && (!state.vFound || v.foundBy === state.vFound) && (!state.vPuzzle || v.puzzle)
+    && (!state.vType || v.kind === state.vType)
     && (!state.vGenre || v.genres?.includes(state.vGenre)) && (!state.vCat || v.category === state.vCat)
     && (!needle || [v.title, v.titleVi, v.author, v.game, v.category, ...v.tags].join(" ").toLowerCase().includes(needle)));
   const sorters = {
@@ -333,9 +340,163 @@ async function renderVideos(main, seq) {
           <div class="cn-vstats"><span>♥ <b>${num(v.likes)}</b>${gain(v.likesGain)}</span><span>▶ ${num(v.play)}${gain(v.playGain)}</span>
             <span>★ ${num(v.favs)}</span><span>💬 ${num(v.comments)}</span></div>
           <div class="cn-vmeta">${esc(v.author ?? "")} · ${dmy(v.pubdate)}${v.category ? ` · ${esc(v.category)}` : ""}</div>
-          <div>${v.puzzle ? `<span class="cn-gtag puzzle">${esc(kindName(v.puzzle))}</span>` : ""}${(v.genres ?? []).filter((k) => k !== "puzzle").slice(0, 2).map((k) => `<span class="cn-gtag">${esc(vGenreName[k] ?? k)}</span>`).join("")}${v.game ? `<span class="cn-gtag" title="Tìm theo tên game mới">${esc(v.game)}</span>` : `<span class="cn-tag">${esc(v.foundBy)}</span>`}</div>
+          <div>${v.kind ? `<span class="cn-vkind ${esc(v.kind)}">${esc(VKIND[v.kind] ?? v.kind)}</span>` : ""}${v.puzzle ? `<span class="cn-gtag puzzle">${esc(kindName(v.puzzle))}</span>` : ""}${(v.genres ?? []).filter((k) => k !== "puzzle").slice(0, 2).map((k) => `<span class="cn-gtag">${esc(vGenreName[k] ?? k)}</span>`).join("")}${v.game ? `<span class="cn-gtag" title="Tìm theo tên game mới">${esc(v.game)}</span>` : `<span class="cn-tag">${esc(v.foundBy)}</span>`}</div>
         </div>
       </a>`).join("")}</div>` : `<div class="cn-empty">Không có video nào khớp bộ lọc.</div>`}`;
+}
+
+// ---------- Video gameplay ----------
+// Mỗi game một thẻ: video chính thức trên TapTap (ảnh động xem trước) và clip Bilibili đúng tên game, gameplay trước.
+// Bấm clip Bilibili để xem ngay bằng trình phát nhúng; bấm video TapTap để xem ảnh động lớn và mở trang video TapTap.
+const VKIND = { trial: "Thử chơi", official: "Giới thiệu chính thức", taptap: "Video chính thức", gameplay: "Gameplay", review: "Đánh giá", pv: "PV / giới thiệu", other: "Khác" };
+const fmtDur = (s) => (s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
+let gpVideos = new Map();
+// Danh sách video giữ lại trong phiên xem để đổi bộ lọc không phải tải lại; xoá khi tải lại meta (sau một lần cập nhật)
+const gpCache = new Map();
+const gpData = async (path) => gpCache.get(path) ?? gpCache.set(path, await api(path)).get(path);
+
+function gpTile(g, v) {
+  const id = `${v.source}:${v.id}`;
+  gpVideos.set(id, { ...v, game: g });
+  const dur = v.duration ? `<span class="cn-gp-dur">${fmtDur(v.duration)}</span>` : "";
+  if (v.source === "taptap") {
+    const tall = (v.aspect ?? 1) < 1;
+    return `<button type="button" class="cn-gp-tile ${tall ? "tall" : "wide"}" data-cn-gp="${esc(id)}" title="${esc(v.title)} · bấm để xem lớn">
+      <div class="cn-gp-media"><img loading="lazy" referrerpolicy="no-referrer" src="${esc(v.anim || v.cover)}" alt="" onerror="this.style.visibility='hidden'">
+        <span class="cn-gp-src taptap">TapTap</span>${dur}</div>
+      <div class="cn-gp-cap"><span class="cn-vkind ${esc(v.kind)}">${esc(VKIND[v.kind] ?? v.kind)}</span></div>
+    </button>`;
+  }
+  return `<button type="button" class="cn-gp-tile bili" data-cn-gp="${esc(id)}" title="${esc(v.title)} · bấm để xem ngay">
+    <div class="cn-gp-media">${v.cover ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(v.cover)}@320w_200h_1c.webp" alt="" onerror="this.style.visibility='hidden'">` : ""}
+      <span class="cn-gp-src bili">Bilibili</span>${dur}<span class="cn-gp-play">▶</span></div>
+    <div class="cn-gp-cap"><span class="cn-vkind ${esc(v.kind)}">${esc(VKIND[v.kind] ?? v.kind)}</span>
+      <span class="cn-gp-title">${esc(v.titleVi || v.title)}</span>
+      <span class="cn-small">▶ ${num(v.play)}${v.pubdate ? ` · ${dmy(v.pubdate)}/${v.pubdate.slice(2, 4)}` : ""}</span></div>
+  </button>`;
+}
+
+// Hai chế độ: kho video gameplay puzzle (mặc định, không phụ thuộc bảng xếp hạng) và video theo game trên bảng xếp hạng
+async function renderGameplay(main, seq) {
+  $("#view-china").dataset.cnGpmode = state.gpMode;
+  return state.gpMode === "games" ? renderGameplayGames(main, seq) : renderPuzzleFeed(main, seq);
+}
+
+// Kho video gameplay puzzle: video chính thức của mọi game gắn tag puzzle trên TapTap (cả game mới ra, game nhỏ, mini game)
+// và clip gameplay Bilibili của game puzzle trên bảng xếp hạng. Thẻ theo kiểu puzzle để lọc, lưới ảnh động xem trước.
+async function renderPuzzleFeed(main, seq) {
+  const d = await gpData("puzzlevideos");
+  if (seq !== renderSeq) return;
+  if (!d.items?.length) return void (main.innerHTML = `<div class="cn-empty">Chưa có video.${STATIC ? "" : ` Video được lấy ở bước "Kho video gameplay puzzle" của lần cập nhật Trung Quốc.`}</div>`);
+  const needle = state.q.trim().toLowerCase();
+  const base = d.items.filter((v) => (!state.gpSrc || v.source === state.gpSrc)
+    && (!state.kind || (state.kind === "mini" ? v.mini : !v.mini))
+    && (!state.gpList || (state.gpList === "new" ? v.inNew : v.inHits))
+    && (!needle || lc([v.game, v.gameVi, v.title, v.titleVi, v.tagline, v.taglineVi, ...(v.tags ?? []).flatMap((t) => [t.zh, t.vi])].join(" ")).includes(needle)));
+  const n = new Map();
+  for (const v of base) n.set(v.pkind, (n.get(v.pkind) ?? 0) + 1);
+  const kinds = (d.kinds ?? []).filter((k) => n.get(k.key)).map((k) => ({ ...k, n: n.get(k.key) }));
+  $("#cn-gpkind").innerHTML = `<option value="">Mọi kiểu</option>` + kinds.map((k) => `<option value="${esc(k.key)}">${esc(k.name)} (${k.n})</option>`).join("");
+  $("#cn-gpkind").value = kinds.some((k) => k.key === state.gpKind) ? state.gpKind : "";
+  const rows = base.filter((v) => !state.gpKind || v.pkind === state.gpKind);
+  const date = (v) => v.released ?? "";
+  const sorters = {
+    newest: (a, b) => date(b).localeCompare(date(a)) || (b.fans ?? b.play ?? 0) - (a.fans ?? a.play ?? 0),
+    fans: (a, b) => (b.fans ?? b.play ?? 0) - (a.fans ?? a.play ?? 0),
+    short: (a, b) => (a.duration ?? 1e9) - (b.duration ?? 1e9),
+  };
+  rows.sort(sorters[state.gpSort] ?? sorters.newest);
+  const shown = rows.slice(0, 240);
+  gpVideos = new Map();
+  const card = (key, label, count) => `<button type="button" class="cn-pcard ${state.gpKind === key ? "active" : ""}" data-cn-gpk="${esc(key)}">
+    <div class="cn-pcard-head"><b>${esc(label)}</b><span>${count}</span></div></button>`;
+  const tile = (v) => {
+    const id = `${v.source}:${v.id}`;
+    gpVideos.set(id, { ...v, kind: v.source === "taptap" ? "taptap" : "gameplay", game: { title: v.game, titleVi: v.gameVi } });
+    const img = v.source === "taptap" ? v.anim || v.cover : v.cover ? `${v.cover}@320w_200h_1c.webp` : "";
+    const when = (d) => `${dmy(d)}/${d.slice(2, 4)}`;
+    const meta = [v.released ? `Game ra ${when(v.released)}` : "", v.posted ? `đăng ${when(v.posted)}` : "",
+      v.fans ? `${num(v.fans)} theo dõi` : "", v.play ? `▶ ${num(v.play)}` : ""].filter(Boolean).join(" · ");
+    return `<button type="button" class="cn-pv ${v.source}" data-cn-gp="${esc(id)}" title="${esc(v.titleVi || v.title || "")}">
+      <div class="cn-pv-media">${img ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(img)}" alt="" onerror="this.style.visibility='hidden'">` : ""}
+        <span class="cn-gp-src ${v.source === "taptap" ? "taptap" : "bili"}">${v.source === "taptap" ? "TapTap" : "Bilibili"}</span>
+        ${v.duration ? `<span class="cn-gp-dur">${fmtDur(v.duration)}</span>` : ""}${v.source === "bilibili" ? `<span class="cn-gp-play">▶</span>` : ""}</div>
+      <div class="cn-pv-cap"><b class="cn-pv-game">${esc(v.game)}</b>${v.gameVi ? `<span class="cn-small cn-pv-vi">${esc(v.gameVi)}</span>` : ""}
+        <div><span class="cn-gtag puzzle">${esc(kindName(v.pkind))}</span>${v.mini ? `<span class="cn-gtag">Mini game</span>` : ""}</div>
+        ${meta ? `<span class="cn-small">${meta}</span>` : ""}</div>
+    </button>`;
+  };
+  main.innerHTML = `
+    <div class="cn-pcards">${card("", "Tất cả", base.length)}${kinds.map((k) => card(k.key, k.name, k.n)).join("")}</div>
+    <p class="hint">Video gameplay của game puzzle, không phụ thuộc bảng xếp hạng. <b>TapTap</b>: video chính thức của mọi game gắn tag puzzle
+      (益智, 消除, 解谜, 合成, 三消, 找茬, 解压, 拼图), cả game mới ra trong ngày, game nhỏ và mini game; ảnh động là vài giây trích từ video.
+      <b>Bilibili</b>: clip gameplay người chơi quay của game puzzle trên bảng xếp hạng, bấm để xem ngay. Kiểu puzzle đoán từ tên game,
+      không đoán được thì vào "Puzzle khác". ${rows.length} video${rows.length > shown.length ? `, hiện ${shown.length} đầu` : ""}.</p>
+    ${shown.length ? `<div class="cn-pv-grid">${shown.map(tile).join("")}</div>` : `<div class="cn-empty">Không có video nào khớp bộ lọc.</div>`}`;
+}
+
+async function renderGameplayGames(main, seq) {
+  const d = await gpData("gameplay");
+  if (seq !== renderSeq) return;
+  $("#cn-gpkind").innerHTML = `<option value="">Mọi kiểu</option>` + (d.kinds ?? []).map((k) => `<option value="${esc(k.key)}">${esc(k.name)} (${k.n})</option>`).join("");
+  $("#cn-gpkind").value = (d.kinds ?? []).some((k) => k.key === state.gpKind) ? state.gpKind : "";
+  if (!d.games?.length) return void (main.innerHTML = `<div class="cn-empty">Chưa có video gameplay.${STATIC ? "" : ` Video được lấy ở bước "Video gameplay" của lần cập nhật Trung Quốc.`}</div>`);
+  const kindOf = Object.fromEntries(META.sources.map((s) => [s.key, s.kind]));
+  const needle = state.q.trim().toLowerCase();
+  const games = d.games.filter((g) => (state.gpGroup === "puzzle" ? g.isPuzzle : state.gpGroup === "new" ? g.isNew : true)
+    && (!state.gpKind || g.puzzle === state.gpKind)
+    && (!state.kind || (g.members ?? []).some((m) => kindOf[m.source] === state.kind))
+    && (!needle || textOf(g).includes(needle) || g.videos.some((v) => lc(`${v.title} ${v.titleVi ?? ""}`).includes(needle))))
+    .map((g) => ({ ...g, videos: g.videos.filter((v) => !state.gpSrc || v.source === state.gpSrc) }))
+    .filter((g) => g.videos.length);
+  gpVideos = new Map();
+  const GROUP = { puzzle: "game puzzle", new: "game mới", "": "game puzzle và game mới" };
+  main.innerHTML = `
+    <p class="hint">Video cho thấy cách chơi của từng ${GROUP[state.gpGroup] ?? "game"}, xếp như tab Puzzle (game mới xếp theo hạng tốt nhất).
+      <b>TapTap</b>: video chính thức của nhà phát hành, ảnh động là vài giây trích từ video. <b>Bilibili</b>: clip có đúng tên game trong tiêu đề,
+      gameplay trước, bấm để xem ngay. Mỗi game tra lại sau ${d.recheckDays} ngày${d.pending ? `; còn ${d.pending} game chưa tra, sẽ tra dần mỗi ngày` : ""}${d.noVideo ? `; ${d.noVideo} game đã tra nhưng chưa tìm thấy video` : ""}.
+      Đang hiện ${games.length} game.</p>
+    ${games.length ? `<div class="cn-gp-list">${games.map((g) => `
+      <div class="cn-gp-game">
+        <div class="cn-gp-head">
+          <div class="cn-gp-name" ${attrs(g)} title="Bấm để xem chi tiết game">${gameCell(g, { small: true, line: false })}</div>
+          <div class="cn-gp-badges">${g.puzzleRank ? `<span class="cn-badge flat" title="Hạng trong tab Puzzle">#${g.puzzleRank} puzzle</span>` : ""}
+            ${g.isNew ? `<span class="cn-badge fresh">Game mới</span>` : ""}${genreHtml(g)}</div>
+          ${memberChips(g)}
+        </div>
+        <div class="cn-gp-strip">${g.videos.map((v) => gpTile(g, v)).join("")}</div>
+      </div>`).join("")}</div>` : `<div class="cn-empty">Không có game nào khớp bộ lọc.</div>`}`;
+}
+
+function openPlayer(id) {
+  const v = gpVideos.get(id);
+  if (!v) return;
+  let dlg = $("#cn-player");
+  if (!dlg) {
+    dlg = document.createElement("dialog");
+    dlg.id = "cn-player";
+    dlg.className = "cn-player";
+    $("#view-china").append(dlg);
+    // Đóng là dừng video (xoá iframe)
+    dlg.addEventListener("close", () => { dlg.innerHTML = ""; });
+  }
+  const g = v.game;
+  const body = v.source === "bilibili"
+    ? `<div class="cn-player-frame"><iframe src="https://player.bilibili.com/player.html?isOutside=true&bvid=${encodeURIComponent(v.id)}&autoplay=1&danmaku=0&high_quality=1"
+        allow="autoplay; fullscreen; encrypted-media" allowfullscreen referrerpolicy="no-referrer" title="Trình phát Bilibili"></iframe></div>`
+    : `<div class="cn-player-anim"><img referrerpolicy="no-referrer" src="${esc(v.anim || v.cover)}" alt=""></div>
+       <p class="cn-small">Ảnh động vài giây trích từ ${esc((VKIND[v.kind] ?? "video").toLowerCase())} của nhà phát hành${v.duration ? ` (video dài ${fmtDur(v.duration)})` : ""}.
+       TapTap không cho phát video từ trang khác, bấm "Xem trên TapTap" để xem đủ.</p>`;
+  dlg.innerHTML = `
+    <div class="cn-player-head">
+      <div><b>${esc(g.title)}</b>${g.titleVi ? ` <span class="cn-small">${esc(g.titleVi)}</span>` : ""}
+        <div class="cn-small">${esc(v.titleVi || v.title)}${v.titleVi ? ` · ${esc(v.title)}` : ""}</div></div>
+      <button type="button" class="btn" data-cn-close-player>Đóng</button>
+    </div>
+    ${body}
+    <div class="cn-player-links"><a class="btn primary" href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">Xem trên ${v.source === "bilibili" ? "Bilibili" : "TapTap"}</a>
+      ${v.author ? `<span class="cn-small">Người đăng: ${esc(v.author)}${v.play ? ` · ▶ ${num(v.play)}` : ""}</span>` : ""}</div>`;
+  if (!dlg.open) dlg.showModal();
 }
 
 // ---------- Thể loại ----------
@@ -457,19 +618,20 @@ function render() {
   const main = $("#cn-main");
   if (!META?.sources?.length && state.view !== "news")
     return void (main.innerHTML = `<div class="cn-empty">Chưa có dữ liệu thị trường Trung Quốc.${STATIC ? "" : ` Bấm "Cập nhật Trung Quốc" để lấy lần đầu (khoảng 3–5 phút).`}</div>`);
-  ({ aggregate: renderAggregate, newgames: renderNewGames, puzzle: renderPuzzle, bilibili: renderVideos, overview: renderOverview, chart: renderChart,
+  ({ aggregate: renderAggregate, newgames: renderNewGames, puzzle: renderPuzzle, gameplay: renderGameplay, bilibili: renderVideos, overview: renderOverview, chart: renderChart,
     tags: renderTags, news: renderNews, search: renderSearch })[state.view](main, seq)
     .catch((e) => { main.innerHTML = `<div class="cn-empty">Lỗi: ${esc(e.message)}</div>`; });
 }
 
 async function loadMeta() {
+  gpCache.clear();
   META = await api("meta");
   if (!META?.sources) META = { sources: [], genres: [], puzzleKinds: [], dates: [], lookupLinks: [], freshDays: 30 };
   fillControls();
   setStatus({ lastRun: META.lastRun });
 }
 
-const STEP = { minigame: "mini game", ios: "App Store", taptap: "TapTap", tencent: "应用宝", xiaomi: "Xiaomi", developers: "nhà phát triển", news: "tin ngành", bilibili: "video Bilibili", translate: "dịch", export: "xuất web" };
+const STEP = { minigame: "mini game", ios: "App Store", taptap: "TapTap", tencent: "应用宝", xiaomi: "Xiaomi", developers: "nhà phát triển", news: "tin ngành", bilibili: "video Bilibili", puzzlevideos: "kho video puzzle", gameplay: "video gameplay", translate: "dịch", export: "xuất web" };
 function setStatus(s) {
   const el = $("#cn-status"), btn = $("#cn-refresh");
   const when = s.lastRun ? new Date(s.lastRun.finished_at).toLocaleString("vi-VN") : null;
@@ -517,10 +679,25 @@ function bind() {
   $("#cn-vpuzzle").onchange = (e) => { state.vPuzzle = e.target.checked; render(); };
   $("#cn-vgenre").onchange = (e) => { state.vGenre = e.target.value; render(); };
   $("#cn-vcat").onchange = (e) => { state.vCat = e.target.value; render(); };
+  $("#cn-vtype").onchange = (e) => { state.vType = e.target.value; render(); };
+  $("#cn-gpgroup").onchange = (e) => { state.gpGroup = e.target.value; render(); };
+  $("#cn-gpkind").onchange = (e) => { state.gpKind = e.target.value; render(); };
+  $("#cn-gpsrc").onchange = (e) => { state.gpSrc = e.target.value; render(); };
+  $("#cn-gpmode").onchange = (e) => { state.gpMode = e.target.value; state.gpKind = ""; render(); };
+  $("#cn-gplist").onchange = (e) => { state.gpList = e.target.value; render(); };
+  $("#cn-gpsort").onchange = (e) => { state.gpSort = e.target.value; render(); };
   let qTimer;
   $("#cn-q").oninput = (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; render(); }, 250); };
 
   $("#view-china").addEventListener("click", (e) => {
+    // Tab Video gameplay: bấm video để xem; bấm nền tối hoặc nút Đóng để tắt
+    const gp = e.target.closest("[data-cn-gp]");
+    if (gp) return openPlayer(gp.dataset.cnGp);
+    // Thẻ kiểu puzzle của kho video: bấm lần nữa để bỏ lọc
+    const gpk = e.target.closest("[data-cn-gpk]");
+    if (gpk) { state.gpKind = state.gpKind === gpk.dataset.cnGpk ? "" : gpk.dataset.cnGpk; return render(); }
+    const player = $("#cn-player");
+    if (player && (e.target === player || e.target.closest("[data-cn-close-player]"))) return player.close();
     const dlg = $("#cn-detail");
     if (e.target.closest("[data-cn-close]") || e.target === dlg) return dlg.close();
     const pcard = e.target.closest("[data-cn-pkind]");
@@ -542,5 +719,6 @@ export async function showChina(sub) {
   }
   await ready;
   if ($("#cn-detail").open) $("#cn-detail").close();
+  if ($("#cn-player")?.open) $("#cn-player").close();
   render();
 }

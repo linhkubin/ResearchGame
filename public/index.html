@@ -242,7 +242,8 @@
         <a class="subtab" href="#/china/aggregate" data-cn-tab="aggregate">Bảng tổng hợp</a>
         <a class="subtab" href="#/china/newgames" data-cn-tab="newgames">Game mới</a>
         <a class="subtab" href="#/china/puzzle" data-cn-tab="puzzle">Puzzle</a>
-        <a class="subtab" href="#/china/bilibili" data-cn-tab="bilibili">Bilibili</a>
+        <a class="subtab" href="#/china/gameplay" data-cn-tab="gameplay">Video gameplay</a>
+        <a class="subtab" href="#/china/bilibili" data-cn-tab="bilibili">Video Bilibili</a>
         <a class="subtab" href="#/china/overview" data-cn-tab="overview">Tổng quan</a>
         <a class="subtab" href="#/china/chart" data-cn-tab="chart">Bảng xếp hạng</a>
         <a class="subtab" href="#/china/tags" data-cn-tab="tags">Thể loại</a>
@@ -252,7 +253,7 @@
       <div class="cn-controls">
         <label class="cn-for-overview cn-for-chart cn-for-tags">Nguồn <select id="cn-source"></select></label>
         <label class="cn-for-chart">Bảng <select id="cn-board"></select></label>
-        <label class="cn-for-aggregate cn-for-newgames cn-for-puzzle">Kênh <select id="cn-kind"><option value="">Tất cả</option><option value="app">App (store)</option><option value="mini">Mini game</option></select></label>
+        <label class="cn-for-aggregate cn-for-newgames cn-for-puzzle cn-for-gameplay">Kênh <select id="cn-kind"><option value="">Tất cả</option><option value="app">App (store)</option><option value="mini">Mini game</option></select></label>
         <label class="cn-for-newgames">Loại <select id="cn-newtype">
           <option value="">Tất cả game mới</option>
           <option value="released">Mới phát hành</option>
@@ -271,6 +272,26 @@
           <option value="">Điểm tổng hợp</option><option value="newest">Mới phát hành trước</option>
         </select></label>
         <label class="cn-for-chart cn-for-aggregate">Ngày <select id="cn-date"></select></label>
+        <label class="cn-for-gameplay">Xem <select id="cn-gpmode">
+          <option value="feed">Kho video gameplay puzzle</option><option value="games">Theo game trên bảng xếp hạng</option>
+        </select></label>
+        <label class="cn-for-gameplay cn-gp-feed">Danh sách <select id="cn-gplist">
+          <option value="">Tất cả</option><option value="new">Game mới phát hành</option><option value="hits">Game nhiều lượt chơi</option>
+        </select></label>
+        <label class="cn-for-gameplay cn-gp-feed">Sắp xếp <select id="cn-gpsort">
+          <option value="newest">Mới phát hành trước</option><option value="fans">Nhiều theo dõi / lượt xem</option><option value="short">Video ngắn trước</option>
+        </select></label>
+        <label class="cn-for-gameplay cn-gp-games">Nhóm <select id="cn-gpgroup">
+          <option value="puzzle">Game puzzle</option><option value="new">Game mới</option><option value="">Tất cả</option>
+        </select></label>
+        <label class="cn-for-gameplay">Kiểu puzzle <select id="cn-gpkind"></select></label>
+        <label class="cn-for-gameplay">Video <select id="cn-gpsrc">
+          <option value="">TapTap + Bilibili</option><option value="taptap">Chỉ video chính thức (TapTap)</option><option value="bilibili">Chỉ clip Bilibili</option>
+        </select></label>
+        <label class="cn-for-bilibili">Loại video <select id="cn-vtype">
+          <option value="">Tất cả</option><option value="gameplay">Gameplay</option><option value="review">Đánh giá</option>
+          <option value="pv">PV / giới thiệu</option><option value="other">Khác</option>
+        </select></label>
         <label class="cn-for-bilibili">Đăng trong <select id="cn-vdays">
           <option value="3">3 ngày</option><option value="7">7 ngày</option><option value="14">14 ngày</option><option value="30" selected>30 ngày</option>
         </select></label>
@@ -283,7 +304,7 @@
         <label class="cn-for-bilibili">Khu <select id="cn-vcat"></select></label>
         <label class="cn-for-bilibili">Tìm thấy qua <select id="cn-vfound"></select></label>
         <label class="cn-for-news">Nguồn tin <select id="cn-news-source"></select></label>
-        <label class="grow cn-for-chart cn-for-aggregate cn-for-newgames cn-for-puzzle cn-for-bilibili cn-for-news cn-for-search">Lọc
+        <label class="grow cn-for-chart cn-for-aggregate cn-for-newgames cn-for-puzzle cn-for-gameplay cn-for-bilibili cn-for-news cn-for-search">Lọc
           <input id="cn-q" type="search" placeholder="Tên game (Trung hoặc Việt), nhà phát triển, thể loại…">
         </label>
         <label class="check cn-for-chart cn-for-aggregate cn-for-puzzle"><span><input id="cn-only-new" type="checkbox"> Chỉ game mới</span></label>
